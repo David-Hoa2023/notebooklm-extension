@@ -1,54 +1,54 @@
 # Snake Game
 
-A classic Snake game implementation using HTML5 Canvas and JavaScript.
+Một trò chơi rắn săn mồi cổ điển được viết bằng Python và Pygame.
 
-## Features
+## Tính năng
 
-- Smooth snake movement
-- Score tracking
-- Increasing difficulty (speed increases as you eat more food)
-- Collision detection (walls and self)
-- Responsive controls
+- Điều khiển rắn bằng các phím mũi tên
+- Hiển thị điểm số
+- Game over khi đâm vào tường hoặc tự cắn vào thân
+- Thức ăn xuất hiện ngẫu nhiên trên màn hình
+- Giao diện đơn giản, dễ chơi
 
-## How to Play
+## Yêu cầu
 
-1. Open `index.html` in your web browser
-2. Use arrow keys to control the snake:
-   - ↑ (Up Arrow): Move up
-   - ↓ (Down Arrow): Move down
-   - ← (Left Arrow): Move left
-   - → (Right Arrow): Move right
-3. Eat the red food to grow and increase your score
-4. Avoid hitting the walls or the snake's own body
+- Python 3.x
+- Pygame
 
-## Game Rules
+## Cài đặt
 
-- Each food eaten increases score by 10 points
-- The snake moves faster as you eat more food
-- Game ends if the snake hits the wall or itself
-- Press OK on the game over alert to restart the game
+1. Cài đặt Python từ [python.org](https://python.org)
+2. Cài đặt Pygame:
+```bash
+pip install pygame
+```
 
-## Technical Details
+## Cách chơi
 
-- Built with HTML5 Canvas
-- Pure JavaScript (no dependencies)
-- Responsive design
-- Object-oriented programming concepts
+1. Chạy game:
+```bash
+python snake_game.py
+```
 
-## Installation
+2. Sử dụng:
+- Phím mũi tên ⬆️: Di chuyển lên
+- Phím mũi tên ⬇️: Di chuyển xuống  
+- Phím mũi tên ⬅️: Di chuyển trái
+- Phím mũi tên ➡️: Di chuyển phải
 
-1. Clone this repository
-2. Open `index.html` in your web browser
-3. Start playing!
+3. Luật chơi:
+- Điều khiển rắn ăn thức ăn (ô màu đỏ)
+- Tránh đâm vào tường hoặc thân rắn
+- Điểm số tăng khi ăn được thức ăn
+- Game kết thúc khi rắn đâm vào tường hoặc tự cắn vào thân
 
-## Future Improvements
+## Tùy chỉnh
 
-- Add sound effects
-- Implement high score system
-- Add different types of food
-- Add obstacles
-- Add different game modes
+Bạn có thể điều chỉnh các thông số trong code:
+- Thay đổi kích thước cửa sổ: `WINDOW_WIDTH` và `WINDOW_HEIGHT`
+- Điều chỉnh tốc độ game: `clock.tick(10)` 
+- Thay đổi màu sắc: `WHITE`, `BLACK`, `RED`, `GREEN`
 
-## License
+## Đóng góp
 
-This project is open source and available under the MIT License.
+Mọi đóng góp đều được hoan nghênh. Hãy tạo pull request để cải thiện game.
