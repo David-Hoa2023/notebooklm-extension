@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Sitemap → Filter → Insert</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="popup.css" rel="stylesheet" />
+</head>
+
+<body>
+  <header>
+    <h1>Sitemap → Filter → Insert</h1>
+    <button id="openSettingsBtn">Cài đặt</button>
+  </header>
+
+  <main>
+    <!-- Extraction -->
+    <section class="card">
+      <h2>1) Extract</h2>
+      <div class="row">
+        <label for="baseUrl" class="label">Site</label>
+        <input id="baseUrl" type="url" placeholder="https://example.com" autocomplete="off" />
+        <button id="extractBtn" class="primary">Extract Links</button>
+      </div>
+      <div id="extractProgress" class="progress" hidden>
+        <progress id="extractProgressBar" max="100" value="0"></progress>
+        <span id="extractStatus">Starting…</span>
+      </div>
+
+      <details id="crawlerSettings" class="settings" style="margin-top: 16px;">
+        <summary>Or crawl website</summary>
+        <div class="row">
+          <label class="label" for="crawlUrl">Start URL</label>
+          <input id="crawlUrl" type="url" placeholder="https://example.com" autocomplete="off" />
+          <button id="crawlBtn">Crawl Website</button>
+        </div>
+        <div class="row">
+          <label class="label" for="crawlDepth">Max depth</label>
+          <input id="crawlDepth" type="number" min="1" max="5" value="2" />
+          <span class="muted">How many levels deep to follow links</span>
+        </div>
+        <div class="row">
+          <label class="label" for="crawlMax">Max pages</label>
+          <input id="crawlMax" type="number" min="10" max="5000" value="1000" />
+          <span class="muted">Maximum pages to discover</span>
+        </div>
+        <div class="row">
+          <label class="label"></label>
+          <label><input id="crawlSameDomain" type="checkbox" checked /> Only crawl same domain</label>
+        </div>
+        <div id="crawlProgress" class="progress" hidden>
+          <progress id="crawlProgressBar" max="100" value="0"></progress>
+          <span id="crawlStatus">Starting…</span>
+        </div>
+      </details>
+
+      <details id="manualUrlInput" class="settings" style="margin-top: 16px;">
+        <summary>Or paste URLs manually</summary>
+        <div class="row">
+          <label class="label" for="manualUrls">URLs (one per line)</label>
+          <textarea id="manualUrls" rows="8"
+            placeholder="https://example.com/page1&#10;https://example.com/page2&#10;https://example.com/page3"></textarea>
+        </div>
+        <div class="row">
+          <label class="label"></label>
+          <button id="loadManualBtn">Load URLs</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- Filtering -->
+    <section class="card">
+      <h2>2) Filter by Topic (LLM)</h2>
+      <div class="row">
+        <label for="topicInput" class="label">Topic</label>
+        <input id="topicInput" type="text" placeholder="e.g., AI ethics" />
+      </div>
+      <div class="row">
+        <label for="threshold" class="label">Threshold</label>
+        <input id="threshold" type="range" min="0" max="1" step="0.05" value="0.5" />
+        <output id="thresholdOut">0.50</output>
+        <button id="filterBtn">Filter</button>
+      </div>
+
+      <details id="llmSettings" class="settings">
+        <summary>LLM Settings</summary>
+        <div class="row">
+          <label class="label" for="provider">Provider</label>
+          <select id="provider">
+            <option value="openai" selected>OpenAI (Chat Completions)</option>
+            <option value="generic">Generic JSON endpoint</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="label" for="endpoint">Endpoint</label>
+          <input id="endpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions" />
+        </div>
+        <div class="row">
+          <label class="label" for="model">Model</label>
+          <input id="model" type="text" placeholder="gpt-4o-mini" />
+        </div>
+        <div class="row">
+          <label class="label" for="apiKey">API key</label>
+          <input id="apiKey" type="password" placeholder="sk-..." />
+        </div>
+        <div class="row">
+          <label class="label" for="batchSize">Batch size</label>
+          <input id="batchSize" type="number" min="1" max="200" value="100" />
+        </div>
+        <div class="row">
+          <label class="label" for="metaLimit">Meta fetch (first N URLs)</label>
+          <input id="metaLimit" type="number" min="0" max="5000" value="200" />
+        </div>
+        <div class="row">
+          <label class="label"></label>
+          <label><input id="rememberKey" type="checkbox" /> Remember API key on this device</label>
+        </div>
+        <div class="row">
+          <label class="label"></label>
+          <button id="saveSettingsBtn">Save settings</button>
+        </div>
+      </details>
+
+      <div id="filterProgress" class="progress" hidden>
+        <progress id="filterProgressBar" max="100" value="0"></progress>
+        <span id="filterStatus">Preparing…</span>
+      </div>
+    </section>
+
+    <!-- List + selection -->
+    <section class="card">
+      <h2>3) Select</h2>
+      <div class="row wrap">
+        <label><input type="checkbox" id="selectAll" /> Select all shown</label>
+        <label><input type="checkbox" id="showMatchesOnly" checked /> Show matches only</label>
+        <span id="counts" class="muted">All: 0 · Matches: 0 · Selected: 0</span>
+      </div>
+      <ul id="urlList" class="list" role="listbox" aria-label="Extracted URLs"></ul>
+    </section>
+
+    <!-- Insert -->
+    <section class="card">
+      <h2>4) Insert to NotebookLM</h2>
+      <div class="row">
+        <button id="insertBtn" class="success" disabled>Insert into NotebookLM</button>
+        <span class="muted">Copies links and opens NotebookLM. Paste into “Add sources”.</span>
+      </div>
+      <div id="log" class="log" aria-live="polite"></div>
+    </section>
+
+    <details id="assistSettings" class="settings">
+      <summary>NotebookLM Assist</summary>
+      <div class="row">
+        <label class="label"></label>
+        <label><input id="assistEnabled" type="checkbox" /> Enable auto‑focus “Add sources” (opt‑in)</label>
+        <span></span>
+      </div>
+    </details>
+
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>
