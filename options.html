@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Cài đặt Extension</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 600px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: bold;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 16px;
+      margin-right: 8px;
+      cursor: pointer;
+    }
+
+    #backBtn {
+      background-color: #f0f0f0;
+      color: #333;
+      border: 1px solid #ccc;
+    }
+
+    #saveBtn {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Cài đặt Extension</h1>
+
+  <label for="endpoint">LLM Endpoint</label>
+  <input type="url" id="endpoint" placeholder="https://api.openai.com/v1/chat/completions" />
+
+  <label for="apiKey">API Key</label>
+  <input type="password" id="apiKey" placeholder="sk-..." />
+
+  <label for="batchSize">Batch Size</label>
+  <input type="number" id="batchSize" min="1" max="200" value="100" />
+
+  <label for="metaLimit">Meta Fetch Limit</label>
+  <input type="number" id="metaLimit" min="0" max="5000" value="200" />
+
+  <label for="notebookId">NotebookLM Notebook</label>
+  <input type="text" id="notebookId" placeholder="Notebook ID (optional)" />
+
+  <button id="backBtn">Back</button>
+  <button id="saveBtn">Save</button>
+  <div id="status" style="margin-top: 12px; color: green;"></div>
+
+  <script src="options.js"></script>
+</body>
+
+</html>

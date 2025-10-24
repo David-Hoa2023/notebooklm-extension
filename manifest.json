@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Sitemap → Filter → Insert to NotebookLM",
+  "short_name": "Sitemap Filter Insert",
+  "version": "1.0.0",
+  "description": "Extract URLs from a site's sitemap(s), filter by topic with an LLM, and insert selected links into NotebookLM.",
+  "action": {
+    "default_title": "Sitemap Filter Insert",
+    "default_popup": "scr/popup.html"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "scr/sw.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "*://*/*",
+    "https://notebooklm.google.com/*"
+  ],
+  "icons": {
+    "48": "icons/icon48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://notebooklm.google.com/*"
+      ],
+      "js": [
+        "content/notebooklm-assist.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
