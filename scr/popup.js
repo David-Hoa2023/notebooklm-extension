@@ -21,6 +21,7 @@ const loadManualBtn = $("#loadManualBtn");
 // Web Crawler
 const crawlUrlEl = $("#crawlUrl");
 const crawlBtn = $("#crawlBtn");
+const stopCrawlBtn = $("#stopCrawlBtn");
 const crawlDepthEl = $("#crawlDepth");
 const crawlMaxEl = $("#crawlMax");
 const crawlSameDomainEl = $("#crawlSameDomain");
@@ -59,6 +60,8 @@ const urlList = $("#urlList");
 // Insert
 const insertBtn = $("#insertBtn");
 const logEl = $("#log");
+const notebookSelect = $("#notebookSelect");
+const refreshNotebooksBtn = $("#refreshNotebooksBtn");
 
 /* ------------------------------ state ------------------------------- */
 const state = {
@@ -75,7 +78,8 @@ const state = {
     batchSize: 100,
     metaLimit: 200,
     assistEnabled: false
-  }
+  },
+  notebooks: [] // Store fetched notebooks
 };
 
 /* --------------------------- boot / preload -------------------------- */
@@ -109,6 +113,9 @@ chrome.storage.local.get(["settings", "apiKeyPersisted"]).then(({ settings, apiK
 
   // Assist opt‑in
   if (assistEnabledEl) assistEnabledEl.checked = !!state.settings.assistEnabled;
+  
+  // Load notebooks on startup
+  loadNotebooks();
 });
 
 // Reflect threshold value
@@ -197,6 +204,10 @@ crawlBtn?.addEventListener("click", async () => {
   crawlProgressBar.value = 0;
   crawlStatus.textContent = "Starting crawl…";
   
+  // Show stop button, hide crawl button
+  crawlBtn.style.display = "none";
+  stopCrawlBtn.style.display = "inline-block";
+  
   const maxDepth = Number(crawlDepthEl.value || 2);
   const maxUrls = Number(crawlMaxEl.value || 1000);
   const sameDomain = crawlSameDomainEl.checked;
@@ -209,12 +220,31 @@ crawlBtn?.addEventListener("click", async () => {
     sameDomain 
   });
   
+  // Restore button states
+  crawlBtn.style.display = "inline-block";
+  stopCrawlBtn.style.display = "none";
+  
   if (resp?.ok) {
     state.allUrls = resp.urls || [];
     renderList();
     toast(`Crawled ${state.allUrls.length} URL(s).`);
   } else {
     toast(`Crawl failed: ${resp?.error || "Unknown error"}`);
+  }
+});
+
+// Stop crawling
+stopCrawlBtn?.addEventListener("click", async () => {
+  const resp = await chrome.runtime.sendMessage({ type: "STOP_CRAWL" });
+  
+  // Restore button states immediately
+  crawlBtn.style.display = "inline-block";
+  stopCrawlBtn.style.display = "none";
+  
+  if (resp?.ok) {
+    toast("Crawl stopped.");
+  } else {
+    toast(`Failed to stop crawl: ${resp?.error || "Unknown error"}`);
   }
 });
 
@@ -300,35 +330,45 @@ showMatchesOnlyEl?.addEventListener("change", () => {
   applyShowMatches();
 });
 
-// Insert into NotebookLM (copy + open; optional assist nudge)
+// Insert into NotebookLM
 insertBtn?.addEventListener("click", async () => {
   const urls = [...state.selectedSet];
   if (urls.length === 0) return toast("Select at least one link.");
+  
+  const selectedNotebook = notebookSelect.value;
+  const isNewNotebook = selectedNotebook === "new";
+  
   try {
-    await navigator.clipboard.writeText(urls.join("\n"));
-
-    chrome.tabs.create({ url: "https://notebooklm.google.com/" }, (tab) => {
-      // If assist is enabled, ping the content script when the tab finishes loading.
-      if (state.settings.assistEnabled && tab?.id) {
-        const tabId = tab.id;
-        const listener = (updatedTabId, changeInfo) => {
-          if (updatedTabId === tabId && changeInfo.status === "complete") {
-            chrome.tabs.onUpdated.removeListener(listener);
-            // Best-effort: tell the content script to focus Add sources
-            chrome.tabs.sendMessage(tabId, { type: "ASSIST_FOCUS" }, () => {
-              // ignore lastError if script not ready
-              void chrome.runtime.lastError;
-            });
-          }
-        };
-        chrome.tabs.onUpdated.addListener(listener);
-      }
+    // Prepare the content to insert
+    const content = urls.join("\n");
+    
+    // Send message to service worker to handle NotebookLM interaction
+    const resp = await chrome.runtime.sendMessage({
+      type: "INSERT_TO_NOTEBOOKLM",
+      urls: urls,
+      notebookId: selectedNotebook,
+      createNew: isNewNotebook,
+      assistEnabled: state.settings.assistEnabled
     });
-
-    toast(`Copied ${urls.length} link(s) to clipboard. NotebookLM opened—paste into “Add sources”.`);
+    
+    if (resp?.ok) {
+      toast(`Successfully inserted ${urls.length} link(s) into NotebookLM.`);
+      // Refresh notebooks list in case a new one was created
+      if (isNewNotebook) {
+        await loadNotebooks();
+      }
+    } else {
+      toast(`Failed to insert: ${resp?.error || "Unknown error"}`);
+    }
   } catch (e) {
-    toast(`Clipboard/tab error: ${e instanceof Error ? e.message : String(e)}`);
+    toast(`Error: ${e instanceof Error ? e.message : String(e)}`);
   }
+});
+
+// Refresh notebooks list
+refreshNotebooksBtn?.addEventListener("click", async () => {
+  await loadNotebooks();
+  toast("Notebooks list refreshed.");
 });
 
 // Save settings button
@@ -456,4 +496,82 @@ async function saveSettingsToStorage(settings, persistKey) {
     apiKeyPersisted: !!persistKey
   };
   await chrome.storage.local.set(toStore);
+}
+
+/* --------------------------- notebook management -------------------------- */
+
+async function loadNotebooks() {
+  notebookSelect.innerHTML = '<option value="new">Create New Notebook</option>';
+  notebookSelect.innerHTML += '<option value="loading" disabled>Loading notebooks...</option>';
+  
+  try {
+    // Send message to service worker to fetch notebooks
+    const resp = await chrome.runtime.sendMessage({ type: "FETCH_NOTEBOOKS" });
+    
+    // Clear loading option
+    notebookSelect.innerHTML = '<option value="new">Create New Notebook</option>';
+    
+    if (resp?.ok) {
+      if (resp.notebooks && resp.notebooks.length > 0) {
+        state.notebooks = resp.notebooks;
+        
+        // Add a separator
+        const separator = document.createElement('option');
+        separator.disabled = true;
+        separator.textContent = '──────────';
+        notebookSelect.appendChild(separator);
+        
+        // Add existing notebooks
+        resp.notebooks.forEach(notebook => {
+          const option = document.createElement('option');
+          option.value = notebook.id;
+          option.textContent = notebook.title || `Notebook ${notebook.id}`;
+          notebookSelect.appendChild(option);
+        });
+        
+        console.log(`Loaded ${resp.notebooks.length} notebooks`);
+      } else {
+        // No notebooks found
+        if (resp.message) {
+          console.log('Notebooks fetch result:', resp.message);
+        } else {
+          console.log('No existing notebooks found');
+        }
+        
+        // Add informational option
+        const infoOption = document.createElement('option');
+        infoOption.disabled = true;
+        infoOption.textContent = '(No existing notebooks found)';
+        notebookSelect.appendChild(infoOption);
+      }
+    } else {
+      // Error occurred
+      console.warn('Failed to fetch notebooks:', resp?.error);
+      toast(`Failed to fetch notebooks: ${resp?.error || 'Unknown error'}`);
+      
+      // Add error option
+      const errorOption = document.createElement('option');
+      errorOption.disabled = true;
+      errorOption.textContent = '(Error loading notebooks)';
+      notebookSelect.appendChild(errorOption);
+    }
+  } catch (e) {
+    console.error('Error loading notebooks:', e);
+    const errorMsg = e.message || 'Unknown error';
+    toast(`Error loading notebooks: ${errorMsg}`);
+    
+    notebookSelect.innerHTML = '<option value="new">Create New Notebook</option>';
+    const errorOption = document.createElement('option');
+    errorOption.disabled = true;
+    
+    if (errorMsg.includes('Could not establish connection')) {
+      errorOption.textContent = '(Content script not loaded - reload extension)';
+    } else if (errorMsg.includes('not responding')) {
+      errorOption.textContent = '(Content script not responding - refresh NotebookLM)';
+    } else {
+      errorOption.textContent = '(Open NotebookLM to see existing notebooks)';
+    }
+    
+    notebookSelect.appendChild(errorOption);
+  }
 }

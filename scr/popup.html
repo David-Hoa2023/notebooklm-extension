@@ -34,6 +34,7 @@
           <label class="label" for="crawlUrl">Start URL</label>
           <input id="crawlUrl" type="url" placeholder="https://example.com" autocomplete="off" />
           <button id="crawlBtn">Crawl Website</button>
+          <button id="stopCrawlBtn" class="danger" style="display: none;">Stop Crawl</button>
         </div>
         <div class="row">
           <label class="label" for="crawlDepth">Max depth</label>
@@ -143,8 +144,16 @@
     <section class="card">
       <h2>4) Insert to NotebookLM</h2>
       <div class="row">
+        <label class="label">Notebook</label>
+        <select id="notebookSelect">
+          <option value="new" selected>Create New Notebook</option>
+          <option value="loading" disabled>Loading notebooks...</option>
+        </select>
+        <button id="refreshNotebooksBtn" title="Refresh notebook list">↻</button>
+      </div>
+      <div class="row">
         <button id="insertBtn" class="success" disabled>Insert into NotebookLM</button>
-        <span class="muted">Copies links and opens NotebookLM. Paste into “Add sources”.</span>
+        <span class="muted">Automatically inserts links into the selected notebook.</span>
       </div>
       <div id="log" class="log" aria-live="polite"></div>
     </section>
@@ -153,8 +162,12 @@
       <summary>NotebookLM Assist</summary>
       <div class="row">
         <label class="label"></label>
-        <label><input id="assistEnabled" type="checkbox" /> Enable auto‑focus “Add sources” (opt‑in)</label>
+        <label><input id="assistEnabled" type="checkbox" /> Enable auto‑insert mode</label>
         <span></span>
+      </div>
+      <div class="row">
+        <label class="label"></label>
+        <span class="muted">When enabled, automatically inserts content into NotebookLM</span>
       </div>
     </details>
 
