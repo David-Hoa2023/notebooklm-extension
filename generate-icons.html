@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Icon Generator for NotebookLM Extension</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .icon-container {
+            display: inline-block;
+            margin: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .icon-container h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            display: block;
+            margin: 10px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .instructions {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <h1>NotebookLM Extension Icon Generator</h1>
+    
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Open this file in Chrome</li>
+            <li>Right-click on each canvas and select "Save image as..."</li>
+            <li>Save as icon16.png, icon48.png, and icon128.png in the icons folder</li>
+            <li>Or click the download buttons below each icon</li>
+        </ol>
+    </div>
+
+    <div class="icon-container">
+        <h3>16x16 Icon</h3>
+        <canvas id="icon16" width="16" height="16"></canvas>
+        <button onclick="downloadIcon('icon16', 16)">Download icon16.png</button>
+    </div>
+
+    <div class="icon-container">
+        <h3>48x48 Icon</h3>
+        <canvas id="icon48" width="48" height="48"></canvas>
+        <button onclick="downloadIcon('icon48', 48)">Download icon48.png</button>
+    </div>
+
+    <div class="icon-container">
+        <h3>128x128 Icon</h3>
+        <canvas id="icon128" width="128" height="128"></canvas>
+        <button onclick="downloadIcon('icon128', 128)">Download icon128.png</button>
+    </div>
+
+    <script>
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Set up scaling for crisp rendering
+            const scale = size / 128; // Design at 128px and scale down
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#4A90E2');  // Blue
+            gradient.addColorStop(1, '#7B68EE');  // Purple
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Draw notebook pages (white rectangles with slight offset)
+            ctx.save();
+            
+            // Back page
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillRect(size * 0.25, size * 0.15, size * 0.55, size * 0.65);
+            
+            // Middle page
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fillRect(size * 0.22, size * 0.18, size * 0.55, size * 0.65);
+            
+            // Front page
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(size * 0.2, size * 0.2, size * 0.55, size * 0.65);
+            
+            // Draw lines on the notebook
+            ctx.strokeStyle = '#E0E0E0';
+            ctx.lineWidth = size * 0.01;
+            const lineSpacing = size * 0.08;
+            for (let i = 1; i <= 4; i++) {
+                const y = size * 0.2 + (i * lineSpacing);
+                if (y < size * 0.8) {
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.25, y);
+                    ctx.lineTo(size * 0.7, y);
+                    ctx.stroke();
+                }
+            }
+            
+            // Draw link/chain symbol overlapping the notebook
+            ctx.strokeStyle = '#2E7D32';  // Green for the link
+            ctx.fillStyle = '#2E7D32';
+            ctx.lineWidth = size * 0.04;
+            ctx.lineCap = 'round';
+            
+            // Draw two chain links
+            const linkSize = size * 0.15;
+            const linkX = size * 0.55;
+            const linkY = size * 0.55;
+            
+            // First link
+            ctx.beginPath();
+            ctx.ellipse(linkX - linkSize/2, linkY, linkSize/2, linkSize/3, -Math.PI/4, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Second link
+            ctx.beginPath();
+            ctx.ellipse(linkX + linkSize/2, linkY, linkSize/2, linkSize/3, -Math.PI/4, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Add a small pen/pencil icon
+            ctx.save();
+            ctx.translate(size * 0.65, size * 0.35);
+            ctx.rotate(Math.PI / 4);
+            
+            // Pen body
+            ctx.fillStyle = '#FF6B6B';
+            ctx.fillRect(0, 0, size * 0.04, size * 0.2);
+            
+            // Pen tip
+            ctx.fillStyle = '#333333';
+            ctx.beginPath();
+            ctx.moveTo(0, size * 0.2);
+            ctx.lineTo(size * 0.02, size * 0.24);
+            ctx.lineTo(size * 0.04, size * 0.2);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.restore();
+            
+            // Add subtle shadow/depth
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(size * 0.2, size * 0.83, size * 0.55, size * 0.02);
+            
+            ctx.restore();
+        }
+
+        function downloadIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `icon${size}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        // Draw all icons
+        drawIcon('icon16', 16);
+        drawIcon('icon48', 48);
+        drawIcon('icon128', 128);
+    </script>
+</body>
+</html>

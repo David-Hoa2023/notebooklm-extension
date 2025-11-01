@@ -1,0 +1,80 @@
+# NotebookLM Automation Configuration
+
+# Browser settings
+browser:
+  headless: false  # Set to true for headless mode (no browser window)
+  timeout: 30000  # Default timeout in milliseconds
+  viewport:
+    width: 1280
+    height: 720
+  
+  # Path to Chrome user data for persistent login (optional)
+  # Uncomment and set your path to avoid logging in each time
+  # Windows example: C:\Users\YourName\AppData\Local\Google\Chrome\User Data
+  # Mac example: /Users/YourName/Library/Application Support/Google/Chrome
+  # Linux example: /home/YourName/.config/google-chrome
+  # user_data_dir: null
+
+# NotebookLM settings
+notebooklm:
+  base_url: https://notebooklm.google.com
+  
+  # Delays between operations (in seconds)
+  delays:
+    after_create: 2
+    after_add_source: 3
+    between_bulk_ops: 2
+    page_load: 5
+
+# Selectors (CSS/XPath) - Update these if NotebookLM UI changes
+selectors:
+  create_button:
+    - 'button:has-text("Create new")'
+    - '[aria-label*="Create new"]'
+    - 'button:has-text("+ Create new")'
+    - 'text="Create new"'
+    
+  add_sources_button:
+    - 'button:has-text("Add source")'
+    - 'button:has-text("Add sources")'
+    - '[aria-label*="Add source"]'
+    - 'button:has-text("+")'
+    
+  source_input:
+    - 'textarea[placeholder*="source"]'
+    - 'input[placeholder*="source"]'
+    - 'textarea[placeholder*="link"]'
+    - 'input[placeholder*="URL"]'
+    
+  submit_button:
+    - 'button:has-text("Add")'
+    - 'button:has-text("Insert")'
+    - 'button[type="submit"]'
+    
+  notebook_item:
+    - '[role="listitem"]'
+    - '.notebook-item'
+    - '[data-notebook-id]'
+
+# Bulk operation settings
+bulk_operations:
+  max_concurrent: 1  # Number of concurrent operations
+  retry_attempts: 3  # Number of retries for failed operations
+  batch_size: 10  # Number of sources to add at once
+
+# Logging settings
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  file: automation.log
+  format: '%(asctime)s - %(levelname)s - %(message)s'
+
+# Data sources for bulk import
+data_sources:
+  # CSV file with notebooks and sources
+  csv_file: notebooks_data.csv
+  
+  # Excel file with notebooks and sources
+  excel_file: notebooks_data.xlsx
+  
+  # JSON file with notebooks and sources
+  json_file: notebooks_data.json

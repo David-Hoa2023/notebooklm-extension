@@ -1,54 +1,67 @@
-# Snake Game
+# Multi-Project Repository
 
-Một trò chơi rắn săn mồi cổ điển được viết bằng Python và Pygame.
+This repository contains multiple projects including Chrome extensions and web applications.
 
-## Tính năng
+## 🌸 Bội Kiều - Chrome Extension & PWA
 
-- Điều khiển rắn bằng các phím mũi tên
-- Hiển thị điểm số
-- Game over khi đâm vào tường hoặc tự cắn vào thân
-- Thức ăn xuất hiện ngẫu nhiên trên màn hình
-- Giao diện đơn giản, dễ chơi
+Vietnamese poetry app displaying random quotes from "Truyện Kiều" by Nguyễn Du.
 
-## Yêu cầu
-
-- Python 3.x
-- Pygame
-
-## Cài đặt
-
-1. Cài đặt Python từ [python.org](https://python.org)
-2. Cài đặt Pygame:
-```bash
-pip install pygame
+### 📁 Project Location
+```
+Chrome_Extension/truyen-kieu/
+├── quote-extension/        # Chrome Extension
+│   ├── manifest.json      # Extension manifest
+│   ├── popup.html         # Extension popup UI
+│   ├── popup.js           # Extension logic
+│   ├── background.js      # Background script
+│   └── icons/             # Extension icons
+└── truyen-kieu-pwa/       # Progressive Web App
+    ├── index.html         # PWA main page
+    ├── app.js             # PWA logic
+    ├── service-worker.js  # Offline & notifications
+    ├── manifest.json      # PWA manifest
+    └── icons/             # PWA icons
 ```
 
-## Cách chơi
+### 🚀 PWA Live Demo
+**📱 Install on Android:** https://david-hoa2023.github.io/notebooklm-extension/Chrome_Extension/truyen-kieu/truyen-kieu-pwa/
 
-1. Chạy game:
-```bash
-python snake_game.py
-```
+### Features
+- Random Vietnamese poetry quotes
+- Offline support with service worker
+- Push notifications
+- Mobile-optimized design
+- Chrome extension version
+- PWA for Android installation
 
-2. Sử dụng:
-- Phím mũi tên ⬆️: Di chuyển lên
-- Phím mũi tên ⬇️: Di chuyển xuống  
-- Phím mũi tên ⬅️: Di chuyển trái
-- Phím mũi tên ➡️: Di chuyển phải
+## 🔍 NotebookLM Extension
 
-3. Luật chơi:
-- Điều khiển rắn ăn thức ăn (ô màu đỏ)
-- Tránh đâm vào tường hoặc thân rắn
-- Điểm số tăng khi ăn được thức ăn
-- Game kết thúc khi rắn đâm vào tường hoặc tự cắn vào thân
+Chrome extension for extracting URLs from sitemaps and filtering them with AI for NotebookLM integration.
 
-## Tùy chỉnh
+### Features
+- Sitemap URL extraction
+- LLM topic filtering
+- NotebookLM integration
+- Web crawling functionality
 
-Bạn có thể điều chỉnh các thông số trong code:
-- Thay đổi kích thước cửa sổ: `WINDOW_WIDTH` và `WINDOW_HEIGHT`
-- Điều chỉnh tốc độ game: `clock.tick(10)` 
-- Thay đổi màu sắc: `WHITE`, `BLACK`, `RED`, `GREEN`
+## 🐍 Snake Game
 
-## Đóng góp
+Classic snake game built with Python and Pygame.
 
-Mọi đóng góp đều được hoan nghênh. Hãy tạo pull request để cải thiện game.
+### Features
+- Arrow key controls
+- Score tracking
+- Simple gameplay
+- Collision detection
+
+## Installation & Usage
+
+Each project has its own setup instructions. Please refer to the specific project folders for detailed documentation.
+
+## Contributing
+
+Contributions are welcome! Please create pull requests for any improvements.
+
+## License
+
+Open source projects. Check individual project folders for specific license information.
