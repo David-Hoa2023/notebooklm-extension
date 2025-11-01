@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#330066">
+    <meta name="description" content="Bội Kiều - Ứng dụng xem câu thơ Truyện Kiều ngẫu nhiên">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Bội Kiều - Truyện Kiều PWA</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #1a0033, #330066, #4d0099, #6600cc);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(255,0,255,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,0,255,0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            animation: grid-move 10s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes grid-move {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(20px, 20px); }
+        }
+        
+        .install-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, rgba(102,126,234,0.95), rgba(118,75,162,0.95));
+            padding: 12px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .install-banner.show {
+            display: flex;
+        }
+        
+        .install-banner span {
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .install-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 20px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .main-container {
+            flex: 1;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .chrome-panel {
+            background: linear-gradient(145deg, #e6e6e6, #ffffff);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 
+                20px 20px 60px rgba(0,0,0,0.2),
+                -20px -20px 60px rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chrome-panel::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, 
+                transparent, 
+                rgba(255,255,255,0.3), 
+                transparent);
+            animation: chrome-shine 3s infinite;
+        }
+        
+        @keyframes chrome-shine {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .neon-title {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 
+                0 0 10px #ff00ff,
+                0 0 20px #ff00ff,
+                0 0 30px #ff00ff,
+                0 0 40px #ff00ff,
+                2px 2px 4px rgba(0,0,0,0.8);
+            margin-bottom: 20px;
+            animation: neon-flicker 2s infinite alternate;
+        }
+        
+        @keyframes neon-flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        
+        .visualizer {
+            height: 50px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            margin: 20px 0;
+            gap: 4px;
+        }
+        
+        .bar {
+            flex: 1;
+            background: linear-gradient(to top, #ff00ff, #00ffff);
+            border-radius: 2px 2px 0 0;
+            animation: dance 0.5s ease-in-out infinite alternate;
+            box-shadow: 0 0 10px rgba(255,0,255,0.8);
+        }
+        
+        .bar:nth-child(1) { animation-delay: 0s; height: 20%; }
+        .bar:nth-child(2) { animation-delay: 0.1s; height: 40%; }
+        .bar:nth-child(3) { animation-delay: 0.2s; height: 60%; }
+        .bar:nth-child(4) { animation-delay: 0.3s; height: 30%; }
+        .bar:nth-child(5) { animation-delay: 0.4s; height: 70%; }
+        .bar:nth-child(6) { animation-delay: 0.5s; height: 50%; }
+        .bar:nth-child(7) { animation-delay: 0.6s; height: 80%; }
+        .bar:nth-child(8) { animation-delay: 0.7s; height: 35%; }
+        
+        @keyframes dance {
+            0% { transform: scaleY(1); }
+            100% { transform: scaleY(1.5); }
+        }
+        
+        .frosted-glass {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 15px;
+            margin: 15px 0;
+            box-shadow: 
+                0 8px 32px rgba(0,0,0,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.4);
+        }
+        
+        .doc-input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .input-label {
+            color: #2a2a2a;
+            font-size: 14px;
+            font-weight: 700;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.3);
+            padding: 6px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        
+        .doc-input {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(102,126,234,0.5);
+            border-radius: 8px;
+            padding: 12px;
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        
+        .doc-input:focus {
+            border-color: #00ffff;
+            box-shadow: 
+                inset 0 2px 4px rgba(0,0,0,0.3),
+                0 0 20px rgba(0,255,255,0.4);
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .doc-input::placeholder {
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .action-button {
+            background: linear-gradient(145deg, #4a4a4a, #2a2a2a);
+            border: none;
+            border-radius: 10px;
+            padding: 15px 24px;
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 
+                inset 0 2px 4px rgba(0,0,0,0.5),
+                0 4px 8px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .action-button:active {
+            transform: scale(0.95);
+        }
+        
+        .action-button.fortune {
+            background: linear-gradient(145deg, #ff00ff, #cc00cc);
+            animation: fortune-pulse 2s infinite alternate;
+        }
+        
+        @keyframes fortune-pulse {
+            0% { box-shadow: 0 0 20px rgba(255,0,255,0.5); }
+            100% { box-shadow: 0 0 30px rgba(255,0,255,0.8), 0 0 40px rgba(255,0,255,0.4); }
+        }
+        
+        .fortune-display {
+            background: linear-gradient(145deg, rgba(255,0,255,0.1), rgba(0,255,255,0.1));
+            border: 2px solid rgba(255,0,255,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            backdrop-filter: blur(5px);
+            box-shadow: 
+                inset 0 0 20px rgba(255,0,255,0.2),
+                0 0 30px rgba(0,255,255,0.3);
+            animation: fortune-glow 3s infinite alternate;
+        }
+        
+        @keyframes fortune-glow {
+            0% { border-color: rgba(255,0,255,0.3); }
+            100% { border-color: rgba(0,255,255,0.5); }
+        }
+        
+        .fortune-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 
+                0 0 10px #ff00ff,
+                0 0 20px #ff00ff,
+                0 0 30px #ff00ff;
+            margin-bottom: 15px;
+        }
+        
+        .fortune-text {
+            text-align: center;
+            color: #2a2a2a;
+            font-size: 16px;
+            font-weight: 500;
+            line-height: 1.8;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 1px 3px rgba(255,255,255,0.9);
+            font-style: italic;
+            background: rgba(255,255,255,0.4);
+            border-radius: 5px;
+            padding: 15px;
+        }
+        
+        .fortune-text.loading {
+            animation: text-dance 0.5s infinite alternate;
+        }
+        
+        @keyframes text-dance {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-3px); }
+        }
+        
+        .settings-section {
+            margin-top: 20px;
+        }
+        
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .toggle-label {
+            color: #2a2a2a;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.3);
+            transition: .4s;
+            border-radius: 26px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        
+        .notification-settings {
+            display: none;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .notification-settings.show {
+            display: block;
+        }
+        
+        .interval-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .radio-wrapper {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(102,126,234,0.2);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .radio-wrapper input {
+            margin-right: 10px;
+        }
+        
+        .status-bar {
+            background: linear-gradient(145deg, #000033, #000066);
+            border: 1px solid #00ffff;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 15px;
+            text-align: center;
+            color: #00ffff;
+            font-size: 12px;
+            font-weight: 700;
+            text-shadow: 0 0 5px #00ffff;
+        }
+        
+        .copy-button {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            color: white;
+            font-weight: 600;
+            margin-top: 10px;
+            cursor: pointer;
+            width: 100%;
+        }
+        
+        .copy-button:active {
+            transform: scale(0.95);
+        }
+        
+        @media (max-width: 480px) {
+            .main-container {
+                padding: 10px;
+            }
+            
+            .chrome-panel {
+                padding: 15px;
+            }
+            
+            .neon-title {
+                font-size: 20px;
+            }
+            
+            .fortune-text {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Install Banner -->
+    <div class="install-banner" id="installBanner">
+        <span>📱 Cài đặt ứng dụng Bội Kiều</span>
+        <button class="install-btn" id="installBtn">Cài đặt</button>
+    </div>
+
+    <div class="main-container">
+        <div class="chrome-panel">
+            <div class="neon-title">BỘI KIỀU PWA</div>
+            
+            <div class="visualizer">
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+                <div class="bar"></div>
+            </div>
+            
+            <div class="frosted-glass">
+                <div class="doc-input-section">
+                    <label class="input-label">🔗 GOOGLE DOC URL:</label>
+                    <input type="text" id="docUrl" class="doc-input" placeholder="Dán link Google Doc đã chia sẻ...">
+                    <button class="action-button" id="saveDoc">💾 LƯU NGUỒN THƠ</button>
+                </div>
+            </div>
+            
+            <button class="action-button fortune" id="boiKieu">🔮 BÓI KIỀU</button>
+            
+            <div class="fortune-display">
+                <div class="fortune-title">🌸 LỜI TIÊN TRI 🌸</div>
+                <div class="fortune-text" id="fortuneText">
+                    Nhấn "Bói Kiều" để xem lời tiên tri...
+                </div>
+                <button class="copy-button" id="copyQuote">📋 SAO CHÉP</button>
+            </div>
+            
+            <div class="settings-section">
+                <div class="toggle-container">
+                    <span class="toggle-label">🔔 Thông báo định kỳ</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="notificationToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="notification-settings" id="notificationSettings">
+                    <div class="interval-selector">
+                        <label class="radio-wrapper">
+                            <input type="radio" name="interval" value="15" checked>
+                            <span>⚡ Mỗi 15 phút</span>
+                        </label>
+                        <label class="radio-wrapper">
+                            <input type="radio" name="interval" value="30">
+                            <span>🌟 Mỗi 30 phút</span>
+                        </label>
+                        <label class="radio-wrapper">
+                            <input type="radio" name="interval" value="60">
+                            <span>💫 Mỗi 60 phút</span>
+                        </label>
+                        <label class="radio-wrapper">
+                            <input type="radio" name="interval" value="120">
+                            <span>🚀 Mỗi 2 giờ</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="status-bar" id="status">
+                ◆ SẴN SÀNG XEM BÓI ◆
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

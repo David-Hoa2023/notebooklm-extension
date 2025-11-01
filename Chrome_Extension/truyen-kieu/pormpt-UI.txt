@@ -1,0 +1,1 @@
+generate UI elements with a mix of skeuomorphic styles like frosted glass, chrome, neon and some random highlights to make light source angle confusing. Make it feel like Winamp released an update in 20015.
