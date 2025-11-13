@@ -41,7 +41,19 @@
       "Bash(start \"http://localhost:3000/derivatives?pack_id=f05cd51a-3a65-4677-8e14-ae325ddd9cf1\")",
       "Bash(docker cp:*)",
       "Bash(node:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(npx opennextjs-cloudflare:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(npm i:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(chmod:*)",
+      "Bash(npm run lint)",
+      "Bash(npx tsc:*)",
+      "Bash(docker build:*)"
     ],
     "deny": [],
     "ask": []

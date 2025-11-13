@@ -1,56 +1,75 @@
-# Bội Kiều PWA
+# 🌸 Bội Kiều PWA - Truyện Kiều Progressive Web App
 
-Progressive Web App (PWA) version của ứng dụng Bội Kiều - xem câu thơ Truyện Kiều ngẫu nhiên trên điện thoại Android.
+[![Vietnamese Literature](https://img.shields.io/badge/Literature-Vietnamese-red.svg)](https://vi.wikipedia.org/wiki/Truy%E1%BB%87n_Ki%E1%BB%81u)
+[![PWA](https://img.shields.io/badge/PWA-Progressive%20Web%20App-blue.svg)](https://web.dev/progressive-web-apps/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## 📱 Tính năng PWA
+> **Bội Kiều** là ứng dụng web tiến bộ (PWA) hiển thị các câu thơ ngẫu nhiên từ tác phẩm "Truyện Kiều" của Nguyễn Du, với tính năng thông báo định kỳ và giao diện retro tuyệt đẹp.
 
-- **Cài đặt như ứng dụng native**: Có thể cài đặt trực tiếp từ trình duyệt
-- **Hoạt động offline**: Sử dụng câu thơ mặc định khi không có mạng
-- **Thông báo push**: Nhận câu thơ định kỳ qua thông báo
-- **Thiết kế responsive**: Tối ưu cho màn hình điện thoại
-- **Hiệu ứng rung**: Hỗ trợ vibration API trên mobile
+## ✨ Tính năng
 
-## 🚀 Cách cài đặt trên Android
+- 🔮 **Bói Kiều**: Xem câu thơ ngẫu nhiên với hiệu ứng mystical
+- 📱 **PWA**: Cài đặt như ứng dụng native trên điện thoại
+- 🔔 **Thông báo định kỳ**: Nhận câu thơ theo khoảng thời gian tùy chọn
+- 📚 **Tùy chỉnh nguồn**: Kết nối Google Docs cho bộ sưu tập thơ riêng
+- 🎵 **Giao diện Retro**: Thiết kế winamp-inspired với hiệu ứng neon
+- 📴 **Hoạt động offline**: Sử dụng được khi không có mạng
+- 📋 **Sao chép dễ dàng**: Copy câu thơ yêu thích
+- 💫 **Hiệu ứng animat**: Visualizer bars và chrome shine effects
 
-### Phương pháp 1: Trực tiếp từ web
-1. Mở Chrome trên điện thoại Android
-2. Truy cập vào địa chỉ web hosting PWA này
-3. Nhấn vào banner "Cài đặt ứng dụng Bội Kiều" xuất hiện ở đầu trang
-4. Chọn "Cài đặt" để thêm vào màn hình chính
+## 🚀 Demo
 
-### Phương pháp 2: Từ menu Chrome
-1. Mở PWA trong Chrome
-2. Nhấn vào menu 3 chấm (⋮) góc trên phải
-3. Chọn "Thêm vào Màn hình chính" hoặc "Cài đặt ứng dụng"
-4. Xác nhận cài đặt
+Truy cập: [https://david-hoa2023.github.io/boi-Kieu-PWA/](https://david-hoa2023.github.io/boi-Kieu-PWA/)
 
-## 🌐 Hosting PWA
+## 📱 Cài đặt
 
-Để PWA hoạt động, bạn cần host các file trên một web server hỗ trợ HTTPS. Một số tùy chọn miễn phí:
+### Trên điện thoại (Android/iOS)
+1. Mở trình duyệt và truy cập link demo
+2. Chọn "Thêm vào màn hình chính" hoặc banner cài đặt
+3. Ứng dụng sẽ hoạt động như app native
 
-### GitHub Pages
-1. Upload folder `truyen-kieu-pwa` lên GitHub repository
-2. Bật GitHub Pages trong Settings
-3. Truy cập qua URL: `https://username.github.io/repo-name/truyen-kieu-pwa/`
+### Trên máy tính
+1. Mở Chrome/Edge và truy cập link demo
+2. Nhấp vào biểu tượng cài đặt trong thanh địa chỉ
+3. Chọn "Cài đặt"
 
-### Netlify
-1. Kéo thả folder `truyen-kieu-pwa` vào netlify.com
-2. Nhận URL miễn phí ngay lập tức
+## 🛠️ Chạy cục bộ
 
-### Vercel
-1. Import project từ GitHub hoặc upload trực tiếp
-2. Tự động deploy với URL miễn phí
+### Yêu cầu
+- Python 3.x (để chạy server test)
+- Trình duyệt hiện đại hỗ trợ PWA
 
-## 📁 Cấu trúc PWA
+### Cách chạy
+```bash
+# Clone repository
+git clone https://github.com/David-Hoa2023/boi-Kieu-PWA.git
+cd boi-Kieu-PWA
+
+# Chạy server test
+python serve.py
+
+# Truy cập http://localhost:8443
+```
+
+### Test trên điện thoại (cùng mạng WiFi)
+```bash
+# Tìm địa chỉ IP máy tính
+ipconfig  # Windows
+ifconfig  # macOS/Linux
+
+# Truy cập từ điện thoại: http://[IP]:8443
+```
+
+## 📂 Cấu trúc dự án
 
 ```
-truyen-kieu-pwa/
-├── index.html          # Giao diện chính responsive
-├── app.js              # Logic ứng dụng PWA
-├── service-worker.js   # Service worker cho offline & notifications
-├── manifest.json       # PWA manifest configuration
-├── create_icons.py     # Script tạo icon
-├── icons/              # App icons các kích cỡ
+boi-kieu-pwa/
+├── index.html          # Giao diện chính
+├── app.js             # Logic ứng dụng
+├── service-worker.js   # Service worker cho PWA
+├── manifest.json      # PWA manifest
+├── serve.py          # Server test cục bộ
+├── icons/            # Icons cho PWA
 │   ├── icon-72.png
 │   ├── icon-96.png
 │   ├── icon-128.png
@@ -59,42 +78,79 @@ truyen-kieu-pwa/
 │   ├── icon-192.png
 │   ├── icon-384.png
 │   └── icon-512.png
-└── README.md
+└── README.md         # Tài liệu này
 ```
 
-## 🎯 Sử dụng
+## 🎨 Tính năng kỹ thuật
 
-1. **Nhập nguồn thơ**: Dán URL Google Doc đã chia sẻ
-2. **Xem bói**: Nhấn "Bói Kiều" để xem câu thơ ngẫu nhiên
-3. **Sao chép**: Nhấn "Sao chép" để copy câu thơ
-4. **Thông báo**: Bật toggle để nhận thông báo định kỳ
-5. **Cài đặt**: Chọn tần suất thông báo (15, 30, 60 phút hoặc 2 giờ)
+### PWA Features
+- ✅ Service Worker cho caching và offline
+- ✅ Web App Manifest
+- ✅ Responsive design
+- ✅ Add to homescreen
+- ✅ Push notifications
+- ✅ Background sync
 
-## 🔧 Tính năng kỹ thuật
+### UI/UX Features
+- 🎵 Animated visualizer bars
+- 💎 Chrome-style panel với shine effects
+- 🌈 Neon text effects
+- 📱 Mobile-first responsive design
+- 🔮 Mystical reveal animations
+- ⚡ Vibration feedback (mobile)
 
-- **Service Worker**: Cache offline, background sync
-- **Push Notifications**: Thông báo định kỳ với câu thơ
-- **Web App Manifest**: Cấu hình PWA chuẩn
-- **Responsive Design**: Tối ưu cho mobile
-- **Local Storage**: Lưu cài đặt người dùng
-- **Vibration API**: Phản hồi xúc giác
-- **Clipboard API**: Sao chép câu thơ
+## 🔧 Tùy chỉnh
 
-## 📱 Yêu cầu hệ thống
+### Thêm Google Docs riêng
+1. Tạo Google Docs mới với các câu thơ (mỗi dòng một câu)
+2. Chia sẻ công khai: "Anyone with the link can view"
+3. Copy link và paste vào ứng dụng
+4. Nhấn "Lưu nguồn thơ"
 
-- Android 5.0+ với Chrome 67+
-- iOS 11.3+ với Safari (hỗ trợ hạn chế)
-- Kết nối mạng để tải câu thơ từ Google Docs
-- Hoạt động offline với câu thơ mặc định
+### Định dạng Google Docs
+```
+Trăm năm trong cõi người ta, Chữ tài chữ mệnh khéo là ghét nhau.
+Trời xanh quen thói má hồng, Đánh phong cho bạc má hồng cho phai.
+Cỏ non xanh tận chân trời, Cành lê trắng điểm một vài bông hoa.
+...
+```
 
-## 🎨 Thiết kế
+## 📚 Về Truyện Kiều
 
-- Theme màu tím gradient theo phong cách retro
-- Hiệu ứng neon và chrome metallic
-- Animation bars giống Winamp
-- Font Roboto tối ưu cho mobile
-- Touch-friendly button sizing
+"**Đoạn Trường Tân Thanh**" (thường gọi là Truyện Kiều) là tác phẩm văn học kinh điển của đại thi hào Nguyễn Du (1765-1820). Đây được coi là đỉnh cao của văn học Việt Nam và là báu vật văn hóa dân tộc.
 
-## 🔄 Cập nhật
+### Giá trị văn học
+- 📖 3.254 câu thơ lục bát
+- 🎭 Phản ánh xã hội phfeudal Việt Nam
+- 💝 Thể hiện lý tưởng nhân văn sâu sắc
+- 🌟 Tác phẩm được UNESCO ghi nhận
 
-PWA tự động kiểm tra và cập nhật khi có phiên bản mới. Service worker sẽ tải xuống và cài đặt bản cập nhật trong background.
+## 🤝 Đóng góp
+
+Mọi đóng góp đều được chào đón! Để đóng góp:
+
+1. Fork repository
+2. Tạo feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Mở Pull Request
+
+## 📄 License
+
+Dự án này được phân phối dưới giấy phép MIT. Xem file [LICENSE](LICENSE) để biết thêm chi tiết.
+
+## 🙏 Lời cảm ơn
+
+- **Nguyễn Du** - Tác giả "Truyện Kiều"
+- **Google Fonts** - Font Roboto
+- **PWA Community** - Inspiration cho Progressive Web Apps
+
+## 📧 Liên hệ
+
+- **Author**: David Hoa
+- **GitHub**: [@David-Hoa2023](https://github.com/David-Hoa2023)
+- **Repository**: [boi-Kieu-PWA](https://github.com/David-Hoa2023/boi-Kieu-PWA)
+
+---
+
+*"Trăm năm trong cõi người ta, Chữ tài chữ mệnh khéo là ghét nhau."* - Nguyễn Du

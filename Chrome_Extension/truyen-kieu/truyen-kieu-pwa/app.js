@@ -350,8 +350,8 @@ async function sendNotification() {
         const registration = await navigator.serviceWorker.ready;
         await registration.showNotification('Bội Kiều - Lời tiên tri', {
           body: quote,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/icon-72.png',
+          icon: './icons/icon-192.png',
+          badge: './icons/icon-72.png',
           vibrate: [200, 100, 200],
           tag: 'quote-notification',
           requireInteraction: false,
@@ -361,7 +361,7 @@ async function sendNotification() {
         // Fallback to basic notification
         new Notification('Bội Kiều - Lời tiên tri', {
           body: quote,
-          icon: '/icons/icon-192.png'
+          icon: './icons/icon-192.png'
         });
       }
     } catch (error) {
