@@ -1,0 +1,9 @@
+{
+  "pack_id": "92e6cea5-cd33-4326-a455-b19b051a507e",
+  "content_plan_id": 8,
+  "original_content": "Discover our new integrated marketing platform! Transform scattered data into unified strategy. Optimize campaign performance with smart AI, integrated dashboard and intelligent automation. Sign up for free demo now!",
+  "platforms": [
+    {"platform": "Twitter", "character_limit": 280},
+    {"platform": "LinkedIn", "character_limit": 3000}
+  ]
+}

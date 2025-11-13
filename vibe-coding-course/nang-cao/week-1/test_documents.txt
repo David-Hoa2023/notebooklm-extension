@@ -1,0 +1,43 @@
+Document 1
+title: "AI in Marketing"
+
+author: "John Doe"
+
+published_date: "2024-05-01"
+
+tags: ["marketing", "AI"]
+
+content: "Artificial Intelligence is transforming marketing by enabling personalization, predictive analytics, and automated content creation. Companies use AI to analyze customer behavior and deliver targeted campaigns."
+
+Document 2
+title: "Climate Change and Renewable Energy"
+
+author: "Jane Smith"
+
+published_date: "2023-09-15"
+
+tags: ["environment", "energy"]
+
+content: "Renewable energy sources such as solar and wind are critical in reducing carbon emissions. Governments worldwide are investing in green technologies to combat climate change."
+
+Document 3
+title: "Advances in Healthcare AI"
+
+author: "John Doe"
+
+published_date: "2024-02-20"
+
+tags: ["healthcare", "AI"]
+
+content: "AI is revolutionizing healthcare by assisting in diagnostics, drug discovery, and patient monitoring. Machine learning models can detect diseases earlier and improve treatment outcomes."
+
+Document 4
+title: "History of Blockchain"
+
+author: "Alice Nguyen"
+
+published_date: "2022-11-10"
+
+tags: ["blockchain", "technology"]
+
+content: "Blockchain technology started with Bitcoin but has since expanded to supply chain management, digital identity, and decentralized finance. Its core principle is distributed trust without intermediaries."
