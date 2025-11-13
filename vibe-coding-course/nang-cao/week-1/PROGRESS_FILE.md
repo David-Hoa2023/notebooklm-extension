@@ -519,6 +519,20 @@ RUN npm ci --omit=dev
 - ✅ **Image size optimized** by excluding dev dependencies from final image
 - ✅ **No EUSAGE error** because lockfile exists when npm ci runs
 
+**Additional Fix Applied**: ✅ **Missing public directory error**
+```
+ERROR: "/app/frontend/public": not found
+```
+
+**Root Cause**: Next.js project without static assets has no `public/` directory
+**Solution**: 
+```dockerfile
+# Create empty public directory (Next.js expects it)
+RUN mkdir -p ./frontend/public
+```
+
+**Also Created**: `frontend/public/README.md` to ensure directory exists in repository
+
 #### **2. Component Usage Flow - Icon Display Inconsistency**
 **Problem**: Tool icons display inconsistently between Modal và Message Stream paths
 **Error Symptoms**:
