@@ -475,27 +475,49 @@ npm error code EUSAGE
 npm error The `npm ci` command can only install with an existing package-lock.json
 ```
 
-**Root Cause**: Dockerfile attempting to reinstall production dependencies after build
+**Root Cause Analysis**: ✅ IDENTIFIED
+1. **Single-stage build limitation**: Trying to `rm -rf node_modules` then `npm ci --omit=dev` in same stage
+2. **Dev dependencies needed for build**: Frontend build requires devDependencies (autoprefixer, postcss, tailwindcss)
+3. **Lockfile context**: `npm ci` expects lockfile to be in the same directory context
+
+**Solution Applied**: ✅ **Multi-Stage Docker Build**
 ```dockerfile
-# Problematic line in Dockerfile
-RUN cd frontend && rm -rf node_modules && npm ci --omit=dev
+# Stage 1: Install dependencies and build
+FROM node:18-alpine AS build
+WORKDIR /app
+
+# Frontend deps (including dev dependencies for build)
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN cd frontend && npm ci
+
+# Build frontend (requires dev dependencies)
+RUN cd frontend && npm run build
+
+# Stage 2: Production runtime  
+FROM node:18-alpine AS production
+WORKDIR /app
+
+# Copy frontend build output and package files
+COPY --from=build /app/frontend/.next ./frontend/.next
+COPY --from=build /app/frontend/package.json ./frontend/package.json
+COPY --from=build /app/frontend/package-lock.json ./frontend/package-lock.json
+
+# Install only production dependencies for frontend
+WORKDIR /app/frontend
+RUN npm ci --omit=dev
 ```
 
-**Solution Applied**: ✅ 
-- Removed unnecessary reinstallation of production dependencies
-- Next.js generates static build output that doesn't need runtime node_modules
-- Updated Dockerfile to only clean up node_modules without reinstalling
-
-**Fixed Code**:
-```dockerfile
-# Clean up frontend node_modules - not needed after build for Next.js static export
-RUN cd frontend && rm -rf node_modules
-```
+**Key Improvements**:
+1. **Proper multi-stage build**: Build stage with dev deps, runtime stage with production deps
+2. **Lockfile preservation**: `package-lock.json` copied to production stage before `npm ci`
+3. **Build context separation**: Build artifacts copied to clean production stage
+4. **Dependency optimization**: Dev dependencies available during build, pruned in production
 
 **Why This Works**:
-- Next.js `npm run build` creates optimized static files in `.next` directory
-- Runtime doesn't require node_modules for static deployment
-- Reduces Docker image size by removing unnecessary dependencies
+- ✅ **Build stage** has full dependencies for compilation
+- ✅ **Production stage** gets fresh npm ci with proper lockfile context
+- ✅ **Image size optimized** by excluding dev dependencies from final image
+- ✅ **No EUSAGE error** because lockfile exists when npm ci runs
 
 #### **2. Component Usage Flow - Icon Display Inconsistency**
 **Problem**: Tool icons display inconsistently between Modal và Message Stream paths

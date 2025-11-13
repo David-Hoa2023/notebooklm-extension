@@ -131,3 +131,41 @@ OPENAI_API_KEY, GEMINI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY
 - No unit test framework - use manual testing
 - CORS enabled for development
 - Docker required for database
+
+# Claude Development Guide (TDD Workflow)
+
+## Nguyên tắc chung
+- Luôn viết **test trước** khi thêm tính năng mới.
+- Mỗi thay đổi phải đi kèm ít nhất một test mô tả hành vi mong muốn.
+- Chạy `cargo test` và `cargo check` liên tục để đảm bảo tính đúng đắn.
+
+## Quy trình làm việc
+1. **Research (Nghiên cứu)**
+   - Xác định chức năng cần thêm hoặc bug cần sửa.
+   - Viết mô tả hành vi mong muốn bằng ngôn ngữ tự nhiên.
+
+2. **Plan (Lập kế hoạch)**
+   - Viết test case trong thư mục `tests/` hoặc module `mod tests`.
+   - Test phải mô tả rõ input và output mong đợi.
+   - Ví dụ:
+     ```rust
+     #[test]
+     fn it_adds_two_numbers() {
+         assert_eq!(add(2, 3), 5);
+     }
+     ```
+
+3. **Implement (Thực hiện)**
+   - Viết code tối thiểu để pass test.
+   - Không viết thêm logic ngoài phạm vi test.
+   - Chạy `cargo test` sau mỗi thay đổi.
+
+## Quy tắc kiểm thử
+- **Unit test** cho từng hàm nhỏ.
+- **Integration test** cho các module lớn.
+- Luôn chạy `cargo check` trước commit để đảm bảo không có lỗi biên dịch.
+
+## Ví dụ minh họa
+- Thêm tính năng WASM:
+  - Viết test kiểm tra rằng module WASM có thể compile và chạy một hàm đơn giản.
+  - Sau đó mới viết code để pass test này.
