@@ -1,67 +1,182 @@
-# Multi-Project Repository
+# NotebookLM Extension - Sitemap Filter Insert
 
-This repository contains multiple projects including Chrome extensions and web applications.
+A Chrome extension that extracts URLs from website sitemaps, filters them by topic using LLM, and inserts selected links into NotebookLM.
 
-## 🌸 Bội Kiều - Chrome Extension & PWA
+## Features
 
-Vietnamese poetry app displaying random quotes from "Truyện Kiều" by Nguyễn Du.
+- **Sitemap Extraction**: Automatically discover and extract URLs from website sitemaps
+- **Web Crawling**: Alternative method to crawl websites and discover URLs by following links
+- **Manual URL Input**: Paste URLs manually for processing
+- **LLM Topic Filtering**: Use AI to filter URLs by relevance to specific topics
+- **NotebookLM Integration**: Seamlessly insert filtered URLs into NotebookLM
+- **Auto-focus Assist**: Optional feature to automatically focus the "Add sources" field in NotebookLM
 
-### 📁 Project Location
+## Installation
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/David-Hoa2023/notebooklm-extension.git
+   ```
+
+2. Open Chrome and navigate to `chrome://extensions/`
+
+3. Enable "Developer mode" in the top right corner
+
+4. Click "Load unpacked" and select the extension folder
+
+5. The extension icon should appear in your Chrome toolbar
+
+## Usage
+
+### 1. Extract URLs
+
+**Option A: Sitemap Extraction**
+- Enter a website URL (e.g., `https://example.com`)
+- Click "Extract Links" to discover URLs from sitemaps
+
+**Option B: Web Crawling**
+- Enter a start URL
+- Configure crawl depth (1-5 levels) and maximum pages
+- Choose whether to stay within the same domain
+- Click "Crawl Website"
+
+**Option C: Manual Input**
+- Paste URLs manually (one per line)
+- Click "Load URLs"
+
+### 2. Filter by Topic
+
+- Enter a topic keyword (e.g., "AI ethics", "machine learning")
+- Adjust the relevance threshold (0.0 - 1.0)
+- Configure LLM settings:
+  - Provider: OpenAI or Generic JSON endpoint
+  - API endpoint and key
+  - Batch size and metadata limits
+- Click "Filter" to process URLs with AI
+
+### 3. Select and Insert
+
+- Review filtered URLs with relevance scores
+- Select desired URLs using checkboxes
+- Click "Insert into NotebookLM" to copy links and open NotebookLM
+- Paste the links into the "Add sources" field
+
+## Configuration
+
+### LLM Settings
+
+The extension supports multiple LLM providers:
+
+**OpenAI**
+- Endpoint: `https://api.openai.com/v1/chat/completions`
+- Models: `gpt-4o-mini`, `gpt-4`, `gpt-3.5-turbo`
+- API Key: Your OpenAI API key
+
+**Generic JSON Endpoint**
+- Custom endpoint that accepts `{topic, items}` and returns `[{url, match, score}]`
+- Useful for self-hosted LLM services
+
+### Settings Page
+
+Access the settings page by clicking the "Cài đặt" (Settings) button in the popup to configure:
+- LLM endpoint and API key
+- Batch processing size
+- Metadata fetch limits
+- NotebookLM notebook ID
+
+## File Structure
+
 ```
-Chrome_Extension/truyen-kieu/
-├── quote-extension/        # Chrome Extension
-│   ├── manifest.json      # Extension manifest
-│   ├── popup.html         # Extension popup UI
-│   ├── popup.js           # Extension logic
-│   ├── background.js      # Background script
-│   └── icons/             # Extension icons
-└── truyen-kieu-pwa/       # Progressive Web App
-    ├── index.html         # PWA main page
-    ├── app.js             # PWA logic
-    ├── service-worker.js  # Offline & notifications
-    ├── manifest.json      # PWA manifest
-    └── icons/             # PWA icons
+notebooklm_extension/
+├── manifest.json              # Extension manifest
+├── content/
+│   └── notebooklm-assist.js   # Content script for NotebookLM integration
+├── icons/
+│   ├── icon48.png            # Extension icon (48px)
+│   └── icon128.png           # Extension icon (128px)
+├── scr/
+│   ├── lib/
+│   │   ├── crawler.js        # Web crawling functionality
+│   │   ├── llmFilter.js      # LLM topic filtering
+│   │   └── sitemap.js        # Sitemap extraction
+│   ├── popup.html            # Main popup interface
+│   ├── popup.css            # Popup styling
+│   ├── popup.js             # Popup logic
+│   └── sw.js                # Background service worker
+├── options.html              # Settings page
+├── options.js               # Settings page logic
+└── README.md                # This file
 ```
 
-### 🚀 PWA Live Demo
-**📱 Install on Android:** https://david-hoa2023.github.io/notebooklm-extension/Chrome_Extension/truyen-kieu/truyen-kieu-pwa/
+## Technical Details
 
-### Features
-- Random Vietnamese poetry quotes
-- Offline support with service worker
-- Push notifications
-- Mobile-optimized design
-- Chrome extension version
-- PWA for Android installation
+### Permissions
 
-## 🔍 NotebookLM Extension
+- `storage`: Save user settings and preferences
+- `activeTab`: Access current tab information
+- `scripting`: Inject content scripts
+- `clipboardWrite`: Copy URLs to clipboard
+- `host_permissions`: Access all websites and NotebookLM
 
-Chrome extension for extracting URLs from sitemaps and filtering them with AI for NotebookLM integration.
+### Architecture
 
-### Features
-- Sitemap URL extraction
-- LLM topic filtering
-- NotebookLM integration
-- Web crawling functionality
+- **Manifest V3**: Uses modern Chrome extension architecture
+- **Service Worker**: Background processing for sitemap extraction and LLM filtering
+- **Content Script**: Minimal integration with NotebookLM for auto-focus
+- **Popup Interface**: Main user interface for the extension
 
-## 🐍 Snake Game
+### LLM Integration
 
-Classic snake game built with Python and Pygame.
+The extension uses a flexible LLM integration system:
+- Supports OpenAI's Chat Completions API
+- Generic JSON endpoint support for custom LLM services
+- Batch processing for efficiency
+- Configurable concurrency and timeouts
 
-### Features
-- Arrow key controls
-- Score tracking
-- Simple gameplay
-- Collision detection
+## Development
 
-## Installation & Usage
+### Prerequisites
 
-Each project has its own setup instructions. Please refer to the specific project folders for detailed documentation.
+- Chrome browser with developer mode enabled
+- Basic understanding of Chrome extensions
+
+### Building
+
+No build process required - the extension runs directly from source files.
+
+### Testing
+
+1. Load the extension in Chrome developer mode
+2. Test sitemap extraction with various websites
+3. Verify LLM filtering with different topics
+4. Test NotebookLM integration
 
 ## Contributing
 
-Contributions are welcome! Please create pull requests for any improvements.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
 
-Open source projects. Check individual project folders for specific license information.
+This project is open source. Please check the repository for license details.
+
+## Support
+
+For issues and questions:
+- Create an issue in the GitHub repository
+- Check the extension's settings page for configuration help
+- Ensure your LLM API credentials are correct
+
+## Changelog
+
+### Version 1.0.0
+- Initial release
+- Sitemap extraction functionality
+- Web crawling alternative
+- LLM topic filtering
+- NotebookLM integration
+- Auto-focus assist feature
+- Settings page for configuration

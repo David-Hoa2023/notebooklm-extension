@@ -673,7 +673,7 @@
           const events = [
             new Event('focus', { bubbles: true }),
             new Event('input', { bubbles: true, cancelable: true }),
-            new Event('change', { bubbles: true, cancelable: true }),
+            new Event('change', { bubbles: true }),
             new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }),
             new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }),
             new Event('blur', { bubbles: true })
@@ -907,7 +907,7 @@
     
     return null;
   }
-    
+  
   function findSubmitButton() {
     // Look for submit/add/insert buttons near the input field
     log('Looking for Insert/Submit button...');
