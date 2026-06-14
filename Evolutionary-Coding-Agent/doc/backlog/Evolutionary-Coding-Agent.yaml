@@ -1,0 +1,474 @@
+version: "1.3.0"
+project_name: "Evolutionary-Coding-Agent"
+description: "Hệ thống Language Agent tự tiến hóa dựa trên khung đánh giá AgentCL và phương pháp phân tách bộ nhớ MemProbe. Mục tiêu: biến Agent thành 'lập trình viên lão làng' biết rút kinh nghiệm sau mỗi lần commit, thay vì chỉ là một hệ RAG thông thường."
+
+# ---------------------------------------------------------------------------
+# Trạng thái triển khai (cập nhật 2026-06-13):
+#   status phản ánh đánh giá thực tế trên src/ + logs/trace.jsonl (seed 42).
+#   done         = acceptance criteria đạt
+#   in_progress  = đã có code/chạy được nhưng chưa đủ tiêu chí nghiệm thu
+#   todo         = chưa bắt đầu hoặc thiếu hoàn toàn
+#
+#   Backlog liên quan: doc/backlog/evolutionary-loop.yaml (tiền tố EL_, maps_to -> id ở đây).
+#   Khi đổi status ở đây, cập nhật maps_to tương ứng trong evolutionary-loop.yaml.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Quy ước schema (áp dụng cho mọi task):
+#   id                  : mã định danh duy nhất
+#   title               : tên ngắn gọn
+#   mode                : sequential | parallel  (cách chạy nội bộ task)
+#   priority            : critical | high | medium | low
+#   status              : todo | in_progress | done | blocked
+#   estimate            : S | M | L | XL  (tương đối, theo công sức)
+#   depends_on          : danh sách id phải hoàn thành trước (đồ thị phụ thuộc)
+#   owner               : người phụ trách (để trống nếu chưa phân công)
+#   metrics             : các chỉ số đo lường liên quan
+#   tags                : nhãn phân loại
+#   acceptance_criteria : tiêu chí nghiệm thu (Definition of Done)
+#   description         : mô tả chi tiết
+#
+# Chỉ số đánh giá (AgentCL):
+#   B_i = điểm baseline (memoryless)        |  PG = Plasticity Gain  = F_i - B_i
+#   F_i = điểm First Pass (read+write)      |  SG = Stability Gain   = S_i - F_i
+#   S_i = điểm Second Pass (frozen)         |  GG = Generalization Gain = H_j - B_j
+#   H_j = điểm trên held-out tasks
+# ---------------------------------------------------------------------------
+
+execution_order:
+  - "Foundation_Infra"
+  - "Memory_Engine_Architecture"
+  - "Memory_Lifecycle"
+  - "Skill_Synthesis"
+  - "Compositional_Task_Pipeline"
+  - "Evaluation_Framework"
+  - "Observability_and_Rigor"
+  - "Robustness_Check"
+
+backlog:
+  # =========================================================================
+  - epic: "Foundation_Infra"
+    description: "Nền tảng hạ tầng bắt buộc phải có trước khi Agent chạy. Bao gồm sandbox thực thi code, retrieval stack và định nghĩa giáo trình."
+    tasks:
+      - id: "INFRA_001"
+        title: "Sandbox thực thi code an toàn"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: []
+        owner: ""
+        metrics: ["execution_isolation"]
+        tags: ["infra", "security"]
+        description: "Xây môi trường chạy code do LLM sinh ra trong container cô lập: giới hạn CPU/RAM, timeout, chặn truy cập mạng và filesystem ngoài. Đây là yêu cầu an toàn bắt buộc vì Agent sẽ liên tục thực thi code chưa được kiểm chứng."
+        acceptance_criteria:
+          - "Code chạy trong container với giới hạn CPU/RAM/timeout rõ ràng"
+          - "Không có quyền truy cập mạng và thư mục ngoài sandbox"
+          - "Bắt và phân loại được lỗi: timeout, crash, vi phạm tài nguyên"
+
+      - id: "INFRA_002"
+        title: "Retrieval stack (Vector DB + Embedding + Reranker)"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: []
+        owner: ""
+        metrics: ["retrieval_recall", "retrieval_latency"]
+        tags: ["infra", "retrieval"]
+        description: "Chọn và thiết lập Vector DB, embedding model, và pipeline truy vấn lai (hybrid: dense + BM25) kèm bước reranking. Hỗ trợ filter theo metadata namespace để phục vụ kiến trúc 3 ngăn của MemProbe."
+        acceptance_criteria:
+          - "Vector DB hỗ trợ filter theo metadata (namespace, status, importance)"
+          - "Hybrid search + reranker hoạt động và có thể bật/tắt qua config"
+          - "Đo được recall@k trên một tập truy vấn mẫu"
+
+      - id: "INFRA_003"
+        title: "Định nghĩa giáo trình & tập held-out (Curriculum Dataset)"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: []
+        owner: ""
+        metrics: ["dataset_coverage", "leakage_check"]
+        tags: ["infra", "dataset", "curriculum"]
+        description: "Thiết kế task stream theo đồ thị phụ thuộc (subtasks nền tảng -> complex tasks -> held-out). Định nghĩa rõ độ khó từng cấp. Đặc biệt: đảm bảo tập held-out KHÔNG trùng lặp (leakage-disjoint) với giáo trình huấn luyện."
+        acceptance_criteria:
+          - "Có dependency graph rõ ràng giữa các task"
+          - "Mỗi task có lời giải tham chiếu hoặc unit test để chấm điểm"
+          - "Chứng minh được held-out tách biệt với train (kiểm tra trùng lặp)"
+
+      - id: "INFRA_004"
+        title: "Quản lý config & seed (Reproducibility)"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: []
+        owner: ""
+        metrics: ["reproducibility"]
+        tags: ["infra", "config"]
+        description: "Hệ thống quản lý cấu hình tập trung (LLM, top-k, trọng số retrieval...) và cố định random seed để mọi thí nghiệm có thể tái lập."
+        acceptance_criteria:
+          - "Toàn bộ tham số thí nghiệm nằm trong file config có version"
+          - "Cùng seed + config cho ra kết quả nhất quán"
+
+  # =========================================================================
+  - epic: "Memory_Engine_Architecture"
+    description: "Xây dựng thư viện kinh nghiệm cho Agent (MemProbe - Giai đoạn 1 & 2 của project)."
+    tasks:
+      - id: "MEM_001"
+        title: "Tách ngăn bộ nhớ MemProbe"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["INFRA_002"]
+        owner: ""
+        metrics: ["namespace_separation"]
+        tags: ["memory", "architecture"]
+        description: "Thiết lập Vector Database với 3 namespace riêng biệt: Interaction (raw trajectory - nhật ký code thô, lệnh terminal, hội thoại), Insight (Lesson Learned - bài học và lý do thất bại/tối ưu), và Skill (các hàm/snippet đã module hóa). Phân tách bằng metadata để khi retrieve Agent chọn đúng loại 'vũ khí' thay vì ngập trong văn bản thừa."
+        acceptance_criteria:
+          - "3 namespace tách biệt bằng metadata, query được độc lập từng ngăn"
+          - "Mỗi bản ghi có schema metadata chuẩn (type, task_id, status, timestamp, importance)"
+
+      - id: "MEM_002"
+        title: "Cổng soát vé Validation_Gate & Failure Extraction"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "L"
+        depends_on: ["MEM_001", "INFRA_001"]
+        owner: ""
+        metrics: ["memory_precision", "failure_capture_rate"]
+        tags: ["memory", "quality-gate"]
+        description: "Pipeline xử lý sau mỗi task (post-task): dùng Syntactic Checker/Unit Test để lọc lỗi cú pháp trước, sau đó LLM Judge chấm điểm logic. Nếu pass -> lưu đủ 3 ngăn. Nếu fail -> KHÔNG lưu Interaction (tránh tái sử dụng code rác), nhưng BẮT BUỘC bắt Agent phân tích 'Failure Mode' và lưu vào Insight như lời cảnh báo. Lưu ý: không cần Oracle Judge hoàn hảo; Syntactic Checker rẻ + LLM Judge logic là đủ làm sạch dữ liệu."
+        acceptance_criteria:
+          - "Code fail cú pháp bị chặn trước khi gọi LLM Judge"
+          - "Task fail không tạo bản ghi Interaction nhưng luôn tạo Insight Failure Mode"
+          - "Task pass ghi đồng bộ vào cả 3 ngăn"
+
+  # =========================================================================
+  - epic: "Memory_Lifecycle"
+    description: "Quản lý vòng đời bộ nhớ: chống phình to, mâu thuẫn và nhiễu loạn theo thời gian."
+    tasks:
+      - id: "MEM_003"
+        title: "Khử trùng lặp (Deduplication) trước khi ghi"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["MEM_001"]
+        owner: ""
+        metrics: ["dedup_rate"]
+        tags: ["memory", "lifecycle"]
+        description: "Phát hiện bản ghi trùng/gần trùng (semantic similarity threshold) trước khi write để tránh nhồi nhét nhiều phiên bản của cùng một kinh nghiệm gây nhiễu retrieval."
+        acceptance_criteria:
+          - "Bản ghi vượt ngưỡng tương đồng bị gộp hoặc bỏ qua"
+          - "Có log thống kê tỉ lệ dedup theo từng namespace"
+
+      - id: "MEM_004"
+        title: "Hàm chấm điểm Retrieval (relevance x importance x recency)"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["MEM_001", "INFRA_002"]
+        owner: ""
+        metrics: ["retrieval_quality"]
+        tags: ["memory", "retrieval"]
+        description: "Áp dụng cơ chế chấm điểm kiểu Generative-Agents: điểm cuối = relevance x importance x recency, với trọng số cấu hình được. Tránh việc chỉ dựa vào similarity thuần khiến bộ nhớ cũ/ít quan trọng lấn át."
+        acceptance_criteria:
+          - "Điểm retrieval kết hợp 3 yếu tố, trọng số nằm trong config"
+          - "So sánh được chất lượng top-k so với baseline similarity thuần"
+
+      - id: "MEM_005"
+        title: "Giải quyết mâu thuẫn, decay & giới hạn dung lượng"
+        mode: "sequential"
+        priority: "medium"
+        status: "done"
+        estimate: "L"
+        depends_on: ["MEM_001", "MEM_002"]
+        owner: ""
+        metrics: ["insight_consistency", "memory_size"]
+        tags: ["memory", "lifecycle"]
+        description: "Cơ chế phát hiện Insight mâu thuẫn nhau, áp dụng decay/forgetting cho kinh nghiệm ít dùng, và đặt trần dung lượng + chiến lược eviction. Ngăn Insight phình to vô hạn hoặc tự củng cố bài học sai."
+        acceptance_criteria:
+          - "Phát hiện và đánh dấu/giải quyết Insight mâu thuẫn"
+          - "Có chính sách eviction khi vượt trần dung lượng"
+
+      - id: "MEM_006"
+        title: "Snapshot & versioning bộ nhớ"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["MEM_001"]
+        owner: ""
+        metrics: ["snapshot_integrity"]
+        tags: ["memory", "lifecycle", "evaluation"]
+        description: "Cho phép chụp (snapshot) và khôi phục trạng thái bộ nhớ tại một thời điểm. Đây là điều kiện tiên quyết để 'đóng băng' bộ nhớ sạch sẽ và tái lập được ở Second Pass (EVAL_002)."
+        acceptance_criteria:
+          - "Snapshot bộ nhớ tạo ra trạng thái bất biến, có version"
+          - "Khôi phục snapshot cho ra trạng thái retrieval giống hệt"
+
+  # =========================================================================
+  - epic: "Skill_Synthesis"
+    description: "Biến code chạy đúng thành Skill tái sử dụng được (lấp đầy ngăn Skill một cách có kiểm soát)."
+    tasks:
+      - id: "SKILL_001"
+        title: "Module hóa code pass thành Skill"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "L"
+        depends_on: ["MEM_002"]
+        owner: ""
+        metrics: ["skill_count", "skill_quality"]
+        tags: ["skill"]
+        description: "Quy trình (kiểu Voyager) biến code đã pass thành hàm có tên rõ ràng, signature ổn định, docstring mô tả mục đích/cách dùng. Chỉ những đoạn được module hóa mới vào ngăn Skill."
+        acceptance_criteria:
+          - "Skill có tên, signature, docstring chuẩn hóa"
+          - "Metadata Skill ghi rõ task gốc và mục đích sử dụng"
+
+      - id: "SKILL_002"
+        title: "Kiểm thử & xác minh Skill trước khi cho retrieve"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["SKILL_001", "INFRA_001"]
+        owner: ""
+        metrics: ["skill_pass_rate"]
+        tags: ["skill", "quality-gate"]
+        description: "Tự sinh và chạy unit test cho mỗi Skill trong sandbox. Chỉ Skill pass test mới được đánh dấu khả dụng (retrievable), tránh đưa Skill lỗi vào kho dùng chung."
+        acceptance_criteria:
+          - "Mỗi Skill có ít nhất 1 unit test tự động"
+          - "Chỉ Skill pass test mới ở trạng thái retrievable"
+
+      - id: "SKILL_003"
+        title: "Đồ thị phụ thuộc & ghép nối Skill"
+        mode: "sequential"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["SKILL_001"]
+        owner: ""
+        metrics: ["skill_composition_depth"]
+        tags: ["skill", "composition"]
+        description: "Theo dõi quan hệ phụ thuộc giữa các Skill để hỗ trợ ghép nối (composition) khi giải Complex_Tasks. Skill bậc cao có thể gọi lại Skill bậc thấp đã xác minh."
+        acceptance_criteria:
+          - "Lưu được quan hệ phụ thuộc giữa các Skill"
+          - "Complex task có thể truy vết các Skill thành phần đã dùng"
+
+  # =========================================================================
+  - epic: "Compositional_Task_Pipeline"
+    description: "Hệ thống thăng cấp theo giáo trình bài bản (Giai đoạn 3 của project: Compositional Curriculum theo dependency graph)."
+    tasks:
+      - id: "TASK_001"
+        title: "Luyện tập Subtasks nền tảng"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["INFRA_003", "MEM_001", "SKILL_001"]
+        owner: ""
+        metrics: ["skill_bank_fill_rate"]
+        tags: ["curriculum", "tasks"]
+        description: "Đẩy đồng thời các bài toán nhỏ (xử lý chuỗi, regex, kết nối DB, utility functions...) để lấp đầy ngăn Skill bằng các mảnh ghép cơ bản trước khi đánh trùm cuối. LƯU Ý race condition: chạy parallel trên các luồng độc lập rồi đi qua bước Consolidation đồng bộ (TASK_003) trước khi sang Complex_Tasks."
+        acceptance_criteria:
+          - "Hoàn thành một mẻ subtasks cơ bản trên các luồng độc lập"
+          - "Ngăn Skill được lấp đầy các utility function nền tảng"
+
+      - id: "TASK_003"
+        title: "Bước Consolidation đồng bộ (chống race condition)"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["TASK_001"]
+        owner: ""
+        metrics: ["consolidation_integrity"]
+        tags: ["curriculum", "memory"]
+        description: "Sau khi xử lý xong toàn bộ một batch subtasks parallel, chạy một bước Consolidation ĐỒNG BỘ để dọn dẹp, khử trùng lặp, phân loại và cập nhật Insight/Skill vào Vector DB. Giữ cho Agent không mất cảm nhận về trình tự tiến hóa của bộ nhớ (vốn là giả định cốt lõi của AgentCL: Retrieve -> Interact -> Update)."
+        acceptance_criteria:
+          - "Mọi ghi bộ nhớ từ batch parallel được hợp nhất an toàn, không ghi đè lộn xộn"
+          - "Trạng thái bộ nhớ ổn định trước khi sang Complex_Tasks"
+
+      - id: "TASK_002"
+        title: "Ghép nối Complex_Tasks với Ràng buộc Retrieval"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "L"
+        depends_on: ["TASK_003", "MEM_004", "SKILL_003"]
+        owner: ""
+        metrics: ["plasticity_gain"]
+        tags: ["curriculum", "tasks", "retrieval"]
+        description: "Tung ra bài toán lớn yêu cầu phối hợp các Skill. Hệ thống chỉ Retrieve top-k (vd top-2) bộ nhớ liên quan nhất. Trong System Prompt, BẮT BUỘC ép Agent coi các bộ nhớ này là 'tài liệu tham khảo' (reference context) chứ không phải 'kim chỉ nam tuyệt đối' (authoritative guidance) để chống copy-paste mù quáng. Đây là nơi Plasticity Gain được kích hoạt."
+        acceptance_criteria:
+          - "Retrieval bị giới hạn top-k cấu hình được"
+          - "System prompt định khung bộ nhớ là reference, không phải authoritative"
+          - "Đo được việc tái sử dụng Skill có sẵn để giải task mới"
+
+  # =========================================================================
+  - epic: "Evaluation_Framework"
+    description: "Kỳ thi sát hạch năng lực thực tế (Two-Pass Protocol - Giai đoạn 4 của project)."
+    tasks:
+      - id: "EVAL_000"
+        title: "Thiết lập Memoryless_Baseline"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["INFRA_003"]
+        owner: ""
+        metrics: ["baseline_score_B"]
+        tags: ["evaluation", "baseline"]
+        description: "Chạy toàn bộ task stream bằng một Agent thuần (vd ReAct) KHÔNG có bộ nhớ. Lấy mốc điểm B_i làm cơ sở tính mọi chỉ số Gain (PG, GG) sau này."
+        acceptance_criteria:
+          - "B_i được ghi lại cho mọi task, qua >=3 seeds"
+          - "Agent baseline đảm bảo không đọc/ghi bộ nhớ"
+
+      - id: "EVAL_001"
+        title: "Triển khai First_Pass_Monitor (Plasticity Gain)"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EVAL_000", "TASK_002"]
+        owner: ""
+        metrics: ["plasticity_gain"]
+        tags: ["evaluation", "metrics"]
+        description: "Theo dõi Agent trong quá trình vừa làm vừa học (được quyền Read & Write bộ nhớ). Ghi lại Plasticity Gain (PG = F_i - B_i) để xem Agent có nhạy bén biến kinh nghiệm thành sức mạnh giải task mới không. (Nâng priority từ medium -> high vì đây là một trong hai chỉ số đầu ra cốt lõi.)"
+        acceptance_criteria:
+          - "PG = F_i - B_i log theo từng task, có mean +/- std qua >=3 seeds"
+          - "Xác minh bộ nhớ được bật read+write qua trace"
+
+      - id: "EVAL_002"
+        title: "Chốt hạ Second_Pass_Frozen (Stability Gain)"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EVAL_001", "MEM_006"]
+        owner: ""
+        metrics: ["stability_gain"]
+        tags: ["evaluation", "metrics"]
+        description: "Dùng snapshot (MEM_006) để đóng băng bộ nhớ (chỉ Read, không Write) và bắt Agent giải lại luồng task cũ/tương đương. Tính Stability Gain (SG = S_i - F_i). Nếu SG âm -> bộ nhớ đang bị nhiễu/interference sau khi nạp quá nhiều data. SG dương và ổn định là dấu hiệu trí tuệ tích lũy lâu dài."
+        acceptance_criteria:
+          - "Bộ nhớ ở chế độ read-only đã verify (không write)"
+          - "SG = S_i - F_i được tính và báo cáo qua >=3 seeds"
+
+  # =========================================================================
+  - epic: "Observability_and_Rigor"
+    description: "Quan sát hệ thống và đảm bảo tính chặt chẽ thống kê cho mọi chỉ số."
+    tasks:
+      - id: "OBS_001"
+        title: "Tracing & structured logging"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["INFRA_004"]
+        owner: ""
+        metrics: ["trace_coverage"]
+        tags: ["observability"]
+        description: "Ghi log có cấu trúc và trace cho từng bước vòng lặp Retrieve -> Interact -> Update: query nào được retrieve, Agent dùng gì, ghi gì vào bộ nhớ. Phục vụ debug và phân tích hành vi."
+        acceptance_criteria:
+          - "Mỗi bước Retrieve/Interact/Update đều có trace truy vết được"
+          - "Log đủ để tái dựng lại một lượt giải task"
+
+      - id: "OBS_002"
+        title: "Dashboard chỉ số PG/SG/GG + chi phí"
+        mode: "sequential"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["OBS_001", "EVAL_001"]
+        owner: ""
+        metrics: ["cost_per_task", "latency"]
+        tags: ["observability", "metrics"]
+        description: "Bảng theo dõi trực quan PG/SG/GG cùng với token usage, chi phí API và latency theo từng task/epic. Giúp cân đối hiệu năng và ngân sách (retrieval + judge + multi-pass nhân chi phí lên nhiều lần)."
+        acceptance_criteria:
+          - "Dashboard hiển thị PG/SG/GG theo task/epic"
+          - "Theo dõi token, chi phí và latency theo từng lượt chạy"
+
+      - id: "OBS_003"
+        title: "Multi-seed runs & kiểm định ý nghĩa thống kê"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EVAL_000"]
+        owner: ""
+        metrics: ["variance", "significance"]
+        tags: ["rigor", "metrics"]
+        description: "Chạy mọi thí nghiệm trên nhiều seed, báo cáo phương sai và kiểm định ý nghĩa thống kê cho các chỉ số Gain. Do LLM có tính ngẫu nhiên, chênh lệch từ một lần chạy duy nhất gần như vô nghĩa."
+        acceptance_criteria:
+          - "Mọi chỉ số Gain báo cáo mean +/- std qua >=3 seeds"
+          - "Có kiểm định significance trước khi kết luận một thay đổi là cải thiện"
+
+  # =========================================================================
+  - epic: "Robustness_Check"
+    description: "Chống tẩu hỏa nhập ma và kiểm tra khả năng tổng quát hóa."
+    tasks:
+      - id: "ROB_001"
+        title: "Thử thách Naive_Stream_Interference"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EVAL_002"]
+        owner: ""
+        metrics: ["stability_gain_under_noise"]
+        tags: ["robustness"]
+        description: "Bơm vào một luồng bài tập ngẫu nhiên cùng domain nhưng KHÔNG có tính kế thừa (Naive Stream). Đo lại Stability Gain để stress-test xem hệ thống có sụp đổ (cognitive interference) khi phải tiêu hóa kiến thức hỗn loạn hay không."
+        acceptance_criteria:
+          - "So sánh SG giữa Compositional Stream và Naive Stream"
+          - "Định lượng mức suy giảm do interference (nếu có)"
+
+      - id: "ROB_002"
+        title: "Thử thách Held_out_Tasks (Generalization Gain)"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["INFRA_003", "EVAL_002"]
+        owner: ""
+        metrics: ["generalization_gain"]
+        tags: ["robustness", "generalization"]
+        description: "Ném Agent vào môi trường coding hoàn toàn mới (không có trong giáo trình, đã chứng minh leakage-disjoint ở INFRA_003) để đo Generalization Gain (GG = H_j - B_j). Đảm bảo Agent biết suy luận/tổng quát hóa chứ không overfit giáo trình. (Nâng priority từ low -> high vì tổng quát hóa là một trong những kết quả quan trọng nhất của dự án.)"
+        acceptance_criteria:
+          - "Held-out đã verify tách biệt khỏi train"
+          - "GG = H_j - B_j được tính và báo cáo qua >=3 seeds"
+
+      - id: "ROB_003"
+        title: "Thử thách Memory_Poisoning (Adversarial Insight)"
+        mode: "sequential"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["MEM_005", "EVAL_002"]
+        owner: ""
+        metrics: ["poisoning_resilience", "recovery_rate"]
+        tags: ["robustness", "security"]
+        description: "Tiêm vào một Insight nghe có vẻ hợp lý nhưng SAI, đo mức suy giảm hiệu năng và khả năng tự phục hồi của Agent. Kiểm tra hiệu quả của cơ chế giải quyết mâu thuẫn/decay ở MEM_005."
+        acceptance_criteria:
+          - "Định lượng tác động của Insight độc hại lên điểm số"
+          - "Đánh giá khả năng cơ chế lifecycle phát hiện/loại bỏ Insight sai"
+
+      - id: "ROB_004"
+        title: "Đo Negative_Transfer trên domain lân cận"
+        mode: "parallel"
+        priority: "low"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EVAL_002"]
+        owner: ""
+        metrics: ["negative_transfer"]
+        tags: ["robustness", "generalization"]
+        description: "Đo hiện tượng chuyển giao tiêu cực (negative transfer) trên các task gần domain nhưng khác bản chất, bổ sung cho Naive Stream test để hiểu rõ hơn giới hạn của việc tái sử dụng kinh nghiệm."
+        acceptance_criteria:
+          - "Xác định được các trường hợp kinh nghiệm cũ làm GIẢM hiệu năng"
+          - "Báo cáo điều kiện xảy ra negative transfer"

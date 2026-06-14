@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+temp_sandbox/
+data/memory/memory.db
+data/memory_snapshots/
+logs/
+.code-workspace

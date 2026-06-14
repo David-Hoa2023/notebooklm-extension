@@ -1,0 +1,553 @@
+version: "1.2.0"
+project_name: "Self-Evolving-Agent-Blueprint"
+description: >-
+  A backlog to build an ACTIVE-EXPLORING, self-evolving coding agent based on the
+  MemProbe 3-compartment architecture and the Gao et al. survey. The central design
+  shift: the agent must stop being a "passive student" that consumes a fixed curriculum
+  and instead become an "active explorer" that probes its environment, proposes its own
+  goals, synthesizes its own verification, and seeks novelty to build useful memory
+  contexts where perfectly reusable task scenarios are rare.
+
+# ---------------------------------------------------------------------------
+# ID RECONCILIATION (read before editing):
+#   This blueprint backlog is SEPARATE from the canonical delivery roadmap in
+#   `Evolutionary-Coding-Agent.yaml`. To prevent ID collisions between the two files,
+#   every task here is namespaced with an `EL_` prefix (EL = Evolutionary Loop).
+#
+#   `maps_to`  : the canonical roadmap task id(s) this item corresponds to, or [] if
+#                this is NET-NEW work not present in the canonical roadmap.
+#   `status`   : reflects the REAL implementation state verified against src/ + the
+#                actual logs/trace.jsonl (single-seed run), NOT a flat "todo".
+#                Legend: done = acceptance criteria met; in_progress = built but not
+#                integrated or not yet rigorous; todo = not started; deferred = parked.
+#
+#   The canonical roadmap remains the source of truth for SHARED infrastructure.
+#   When a shared item changes status here, update its `maps_to` counterpart there too.
+#
+# Schema (per task): id, title, mode (sequential|parallel), priority, status, estimate,
+#   depends_on, owner, maps_to, metrics, tags, description, acceptance_criteria
+#
+# Design principles enforced by this backlog:
+#   - Active over passive: the agent generates goals and probes before acting.
+#   - Trustworthy reward: graded, anti-gaming, no silent pass-through.
+#   - Closed loop: lifecycle maintenance must be ON the write path, not dead code.
+#   - Verifiable evolution: every gain reported as mean +/- std over >=3 seeds.
+# ---------------------------------------------------------------------------
+
+execution_order:
+  - "Phase_1_Feedback_and_Rewards_Infra"
+  - "Phase_2_Evolving_Memory_and_Tools"
+  - "Phase_3_Continuous_Test_Time_Deployment"
+  - "Phase_4_Lifecycle_Maintenance"
+  - "Phase_5_Active_Exploration"
+  - "Phase_6_Rigor_and_Observability"
+
+backlog:
+  # =========================================================================
+  - epic: "Phase_1_Feedback_and_Rewards_Infra"
+    description: >-
+      Set up the deterministic checkers and sandbox that extract the 'How' (rewards and
+      textual feedback). Rewards must be trustworthy: graded rather than binary, resistant
+      to reward hacking, and never silently defaulted to 'pass'.
+    tasks:
+      - id: "EL_INFRA_001"
+        title: "Safe Execution Sandbox (with honest execution-mode reporting)"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: []
+        owner: ""
+        maps_to: ["INFRA_001"]
+        metrics: ["execution_isolation", "fallback_usage_rate"]
+        tags: ["infra", "security", "rewards"]
+        description: >-
+          Isolated container to run generated code and extract deterministic rewards. Docker path
+          exists and is correct, but the verified run used the NON-isolated local subprocess fallback.
+          New requirement: record execution mode per run and refuse (or loudly flag) silent fallback
+          during any graded/benchmark run so isolation claims are never overstated.
+        acceptance_criteria:
+          - "Code executes in an isolated container with explicit CPU/RAM/timeout limits."
+          - "System reliably catches and classifies timeout, crash, and resource violations."
+          - "Execution mode (isolated vs fallback) is recorded per run; graded runs refuse silent fallback."
+
+      - id: "EL_MEM_002"
+        title: "Validation Gate, Graded Reward & Failure Mode Extraction"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_INFRA_001"]
+        owner: ""
+        maps_to: ["MEM_002"]
+        metrics: ["failure_capture_rate", "judge_reliability"]
+        tags: ["memory", "quality-gate", "feedback"]
+        description: >-
+          Base gate is done (AST check -> sandbox -> LLM Judge; failure -> Insight, blocks raw failed
+          code from Interaction). NET-NEW hardening: replace binary pass/fail with a GRADED reward
+          (test pass-fraction + quality score), and make the Judge return an explicit error/abstain
+          state instead of silently defaulting to 'pass' on an API error.
+        acceptance_criteria:
+          - "Reward is graded (test pass-fraction + quality score), not just binary."
+          - "Failed code is blocked from Interaction memory; failure always yields an Insight."
+          - "Judge errors produce an explicit abstain/error state, never an implicit pass."
+
+      - id: "EL_MEM_008"
+        title: "Hidden Held-out Tests (anti reward-hacking)"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_002"]
+        owner: ""
+        maps_to: []
+        metrics: ["overfit_gap"]
+        tags: ["quality-gate", "rigor"]
+        description: >-
+          For each task keep a hidden test set the agent never sees in its prompt. Score success on the
+          hidden set to detect prompt-test overfitting and code that games the visible tests.
+        acceptance_criteria:
+          - "Each task has visible tests (in prompt) and hidden tests (scoring only)."
+          - "Overfit gap = visible_score - hidden_score is logged per task."
+
+  # =========================================================================
+  - epic: "Phase_2_Evolving_Memory_and_Tools"
+    description: >-
+      Establish the persistent 'What': the 3-compartment memory and a tool-synthesis pipeline that
+      composes verified skills and tracks provenance so evolution stays debuggable.
+    tasks:
+      - id: "EL_MEM_001"
+        title: "3-Compartment Memory Architecture"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: []
+        owner: ""
+        maps_to: ["MEM_001"]
+        metrics: ["namespace_separation"]
+        tags: ["memory", "architecture"]
+        description: >-
+          Vector DB with three metadata namespaces: Interaction (raw trajectory), Insight
+          (lessons/failure modes), and Skill (reusable functions), each with standard metadata.
+          Verified implemented in src/memory/memory_engine.py + src/infra/retrieval.py.
+        acceptance_criteria:
+          - "Independent querying and filtering by namespace metadata."
+          - "Every record has a standardized metadata schema."
+
+      - id: "EL_MEM_006"
+        title: "Memory Provenance & Versioning"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["provenance_coverage"]
+        tags: ["memory", "observability"]
+        description: >-
+          NET-NEW (note: canonical MEM_006 is memory snapshot/versioning, a different concern). Tag every
+          Insight/Skill with originating task ids and a version so a regression can be traced to the memory
+          write that caused it, making evolution auditable.
+        acceptance_criteria:
+          - "Each Insight/Skill records its source task(s) and a version stamp."
+          - "A regression can be traced back to the memory write(s) that introduced it."
+
+      - id: "EL_SKILL_001"
+        title: "Dynamic Tool Synthesis (Module-ization)"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_MEM_001", "EL_MEM_002"]
+        owner: ""
+        maps_to: ["SKILL_001", "SKILL_002"]
+        metrics: ["skill_pass_rate", "skill_count"]
+        tags: ["skill", "tools"]
+        description: >-
+          Abstract successful code into reusable functions (name, signature, docstring) that must pass a
+          self-generated sandbox unit test before becoming retrievable. Verified in src/skill/skill_manager.py
+          and skill_tester.py.
+        acceptance_criteria:
+          - "Successful raw code is refactored into a standardized function."
+          - "Skill must pass a self-generated unit test before becoming retrievable."
+
+      - id: "EL_SKILL_002"
+        title: "Skill Composition Graph"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_SKILL_001"]
+        owner: ""
+        maps_to: ["SKILL_003"]
+        metrics: ["skill_composition_depth", "skill_reuse_rate"]
+        tags: ["skill", "composition"]
+        description: >-
+          Dependencies are stored in metadata and AST tracing of used skills exists, but there is no real
+          composition resolution. Build a dependency DAG so higher-order skills call verified lower-order
+          ones, and let retrieval return composed skill bundles.
+        acceptance_criteria:
+          - "Skill dependencies are stored and queryable as a graph."
+          - "A complex solution can be traced to its component skills; reuse rate is measurable."
+
+  # =========================================================================
+  - epic: "Phase_3_Continuous_Test_Time_Deployment"
+    description: >-
+      Implement the 'When': the continuous retrieve-solve-consolidate loop during inference, with an
+      intra-task feedback retry so textual feedback helps the current task, not only future ones.
+    tasks:
+      - id: "EL_MEM_004"
+        title: "Intra/Inter-Test-Time Retrieval"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_001"]
+        owner: ""
+        maps_to: ["MEM_004", "INFRA_002", "TASK_002"]
+        metrics: ["retrieval_quality", "recall_at_k"]
+        tags: ["memory", "retrieval"]
+        description: >-
+          Top-k (top-2) retrieval scored by configurable relevance/importance/recency is implemented, and
+          the prompt frames memory as reference context. Remaining gaps: no reranker, no recall@k
+          measurement on a labeled query set.
+        acceptance_criteria:
+          - "Configurable weights for relevance, importance, and recency."
+          - "recall@k measured on a labeled query set; prompt frames memory as reference only."
+
+      - id: "EL_TASK_003"
+        title: "Online Accumulation & Consolidation (honest semantics)"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_SKILL_001", "EL_MEM_004"]
+        owner: ""
+        maps_to: ["TASK_003", "TASK_001"]
+        metrics: ["consolidation_integrity"]
+        tags: ["curriculum", "memory"]
+        description: >-
+          Synchronous consolidation after parallel subtasks is implemented (avoids SQLite write contention).
+          Follow-up: label this as 'batched consolidation' in code and docs rather than describing it as
+          strictly instantaneous online write.
+        acceptance_criteria:
+          - "Memory updates without race conditions."
+          - "Any deferral from true online write is explicitly documented and justified."
+
+      - id: "EL_TASK_004"
+        title: "Intra-Task Reflexion Retry"
+        mode: "sequential"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_002", "EL_MEM_004"]
+        owner: ""
+        maps_to: []
+        metrics: ["self_correction_rate"]
+        tags: ["feedback", "reasoning"]
+        description: >-
+          NET-NEW. On failure, feed the extracted Failure Mode back into the SAME task for a bounded number
+          of retries (intra-task evolution), measuring whether textual feedback improves the current attempt.
+        acceptance_criteria:
+          - "Bounded retry loop consumes the Failure Mode of the previous attempt."
+          - "Self-correction rate (fail->pass within retry budget) is logged."
+
+  # =========================================================================
+  - epic: "Phase_4_Lifecycle_Maintenance"
+    description: >-
+      Keep the loop healthy: dedup, conflict resolution, decay, and confidence-weighting must be ON the
+      live write path (not dead code), and the agent must detect when new memory degrades old performance.
+    tasks:
+      - id: "EL_MEM_007"
+        title: "Wire Lifecycle Into the Memory Write Path"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["lifecycle_invocation_rate"]
+        tags: ["memory", "lifecycle", "integration"]
+        description: >-
+          NET-NEW (critical). The lifecycle modules (dedup/conflict/eviction) exist in src/memory/lifecycle.py
+          but are NEVER called - memory_engine.add_* writes directly. Route every write through
+          dedup -> conflict-resolution -> write -> capacity-enforcement, and emit per-namespace stats.
+        acceptance_criteria:
+          - "Every add_* memory write passes through the lifecycle pipeline."
+          - "Per-namespace dedup/eviction counts are emitted to the trace each run."
+
+      - id: "EL_MEM_003"
+        title: "Deduplication and Conflict Resolution"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_001", "EL_MEM_007"]
+        owner: ""
+        maps_to: ["MEM_003"]
+        metrics: ["dedup_rate", "insight_consistency"]
+        tags: ["memory", "lifecycle"]
+        description: >-
+          Logic exists (deduplicate_and_merge, resolve_conflicts) but is not on the write path. Once
+          EL_MEM_007 wires it in, verify merges and contradiction handling actually fire and log stats.
+        acceptance_criteria:
+          - "Records exceeding a similarity threshold are merged or skipped."
+          - "Contradictory insights trigger a resolution action (update/delete/keep-both)."
+
+      - id: "EL_MEM_005"
+        title: "Forgetting and Eviction (Decay)"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_MEM_001", "EL_MEM_007"]
+        owner: ""
+        maps_to: ["MEM_005"]
+        metrics: ["memory_size"]
+        tags: ["memory", "lifecycle"]
+        description: >-
+          enforce_capacity exists but is never invoked; decay is currently live only inside retrieval
+          scoring. Wire eviction into the maintenance loop and verify it triggers on capacity/recency.
+        acceptance_criteria:
+          - "Eviction triggers on capacity threshold or when recency/usage decays below a limit."
+
+      - id: "EL_MEM_009"
+        title: "Regression Suite Re-testing Solved Tasks"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_003"]
+        owner: ""
+        maps_to: []
+        metrics: ["regression_score_deltas"]
+        tags: ["memory", "regression", "robustness"]
+        description: >-
+          NET-NEW. After each exploration batch, re-run a small regression set of solved tasks
+          and log score deltas to trace.
+        acceptance_criteria:
+          - "A regression suite executes historically solved tasks after each batch."
+          - "Score deltas are logged for tracking performance stability."
+
+      - id: "EL_ROB_001"
+        title: "Negative-Transfer & Interference Probe"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_TASK_003"]
+        owner: ""
+        maps_to: ["ROB_004", "ROB_001"]
+        metrics: ["negative_transfer", "stability_under_noise"]
+        tags: ["robustness", "lifecycle"]
+        description: >-
+          Canonical ROB_004 (negative transfer) is unimplemented; ROB_001 (naive-stream) exists. Periodically
+          re-run previously-solved tasks after new memory batches to detect when accumulation DEGRADES old
+          performance, feeding eviction decisions and quantifying interference.
+        acceptance_criteria:
+          - "Regression suite re-tests solved tasks after each batch; score deltas logged."
+          - "Cases where old memory reduces performance are identified and reported."
+
+  # =========================================================================
+  - epic: "Phase_5_Active_Exploration"
+    description: >-
+      The core of this version. Because reusable task scenarios are rare, the agent must stop being a passive
+      student. It must PROPOSE its own goals at the frontier of its competence, PROBE the environment before
+      acting, SYNTHESIZE its own verification when no reference tests exist, and seek NOVELTY to build broad,
+      useful memory. This epic turns retrieve-solve-consolidate into
+      explore-propose-probe-solve-verify-consolidate. All tasks here are NET-NEW vs the canonical roadmap.
+    tasks:
+      - id: "EL_EXPLORE_001"
+        title: "Automatic Curriculum Proposer (Zone of Proximal Development)"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_MEM_001", "EL_SKILL_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["curriculum_self_generation_rate", "frontier_calibration"]
+        tags: ["exploration", "curriculum", "autonomy"]
+        description: >-
+          The agent proposes its own next tasks based on skill-bank coverage and recent success rate,
+          targeting the frontier of competence. Replaces the fixed human-authored curriculum
+          (src/infra/curriculum.py DEFAULT_CURRICULUM) with an open-ended, self-generated one.
+        acceptance_criteria:
+          - "Agent generates candidate tasks without a human-authored list."
+          - "Proposed difficulty is calibrated to recent success rate (ZPD), with a measurable hit-rate."
+
+      - id: "EL_EXPLORE_002"
+        title: "Active Environment Probing"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_INFRA_001", "EL_MEM_004"]
+        owner: ""
+        maps_to: []
+        metrics: ["probe_action_rate", "observation_yield"]
+        tags: ["exploration", "environment", "autonomy"]
+        description: >-
+          Before committing to a solution, the agent issues exploratory actions - inspect files, query
+          APIs/schemas, run diagnostic snippets in the sandbox - to gather observations rather than acting
+          blind. Observations become Interaction/Insight memory grounding the eventual solution.
+        acceptance_criteria:
+          - "Agent performs >=1 information-gathering action before solving when context is uncertain."
+          - "Probe observations are written to memory and demonstrably influence the solution."
+
+      - id: "EL_EXPLORE_003"
+        title: "Self-Generated Verification (Oracle Synthesis)"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: ["EL_MEM_002", "EL_EXPLORE_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["oracle_validity_rate", "self_verified_task_rate"]
+        tags: ["exploration", "rewards", "autonomy"]
+        description: >-
+          Self-discovered tasks lack reference tests, so the agent must synthesize its own verification
+          (property-based tests, invariants, differential checks) to yield trustworthy reward without human
+          oracles. Synthesized oracles are sanity-checked (must reject known-bad solutions) before use.
+        acceptance_criteria:
+          - "For a self-proposed task, the agent generates executable verification it did not receive."
+          - "Synthesized oracles are validated before being used to score solutions."
+
+      - id: "EL_EXPLORE_004"
+        title: "Skill-Gap-Driven Goal Selection"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_EXPLORE_001", "EL_SKILL_002"]
+        owner: ""
+        maps_to: []
+        metrics: ["skill_bank_coverage", "gap_closure_rate"]
+        tags: ["exploration", "skill", "autonomy"]
+        description: >-
+          Analyze the skill graph for missing or weak capabilities and generate goals to fill those gaps, so
+          exploration is directed toward useful competence rather than random wandering.
+        acceptance_criteria:
+          - "Coverage gaps in the skill bank are identified automatically."
+          - "Generated goals measurably increase skill-bank coverage over time."
+
+      - id: "EL_EXPLORE_005"
+        title: "Explore/Exploit Policy Controller"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_EXPLORE_001", "EL_EXPLORE_002"]
+        owner: ""
+        maps_to: []
+        metrics: ["exploration_ratio", "regret"]
+        tags: ["exploration", "policy"]
+        description: >-
+          A budget-aware controller (bandit/epsilon-style) balancing seeking novel tasks against exploiting
+          known skills, preventing both stagnation (pure exploit) and aimless drift (pure explore).
+        acceptance_criteria:
+          - "Explore/exploit ratio is configurable and adapts to remaining budget and recent payoff."
+          - "Controller decisions are logged and tied to outcome (regret/payoff)."
+
+      - id: "EL_EXPLORE_006"
+        title: "Novelty / Intrinsic-Motivation Reward"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_004", "EL_EXPLORE_005"]
+        owner: ""
+        maps_to: []
+        metrics: ["novelty_score", "memory_diversity"]
+        tags: ["exploration", "rewards"]
+        description: >-
+          Add an intrinsic reward for visiting states/tasks semantically dissimilar from existing memory,
+          encouraging the agent to broaden coverage instead of redundantly re-solving familiar problems.
+        acceptance_criteria:
+          - "Novelty score (distance from nearest memory) contributes to goal selection."
+          - "Memory diversity increases without collapsing task success rate."
+
+  # =========================================================================
+  - epic: "Phase_6_Rigor_and_Observability"
+    description: >-
+      Make evolution VERIFIABLE. Without measurement, an evolving loop can drift while looking healthy.
+      Track fitness, exploration coverage, and cost; report all gains with statistical rigor.
+    tasks:
+      - id: "EL_OBS_001"
+        title: "Structured Tracing of the Full Loop"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_MEM_004"]
+        owner: ""
+        maps_to: ["OBS_001"]
+        metrics: ["trace_coverage"]
+        tags: ["observability"]
+        description: >-
+          JSONL run tracing exists (logs/trace.jsonl) but is result-level, not granular per step. Extend it to
+          trace explore -> propose -> probe -> retrieve -> solve -> verify -> consolidate, including
+          exploration decisions, so any run can be fully reconstructed.
+        acceptance_criteria:
+          - "Each loop step (incl. exploration decisions) is individually traceable."
+          - "A run can be fully reconstructed from the trace."
+
+      - id: "EL_OBS_002"
+        title: "Multi-Seed Runs & Statistical Significance"
+        mode: "parallel"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_OBS_001"]
+        owner: ""
+        maps_to: ["OBS_003"]
+        metrics: ["variance", "significance"]
+        tags: ["rigor", "metrics"]
+        description: >-
+          The framework supports multi-seed but the verified run used a single seed (42); all reported gains
+          are within LLM noise. Run >=3 seeds, report mean +/- std for PG/SG/GG, and gate 'improvement' claims
+          behind a significance test.
+        acceptance_criteria:
+          - "All gain metrics report mean +/- std over >=3 seeds."
+          - "A significance test gates 'improvement' conclusions."
+
+      - id: "EL_OBS_003"
+        title: "Fitness & Exploration Dashboard"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_OBS_001", "EL_OBS_002"]
+        owner: ""
+        maps_to: ["OBS_002"]
+        metrics: ["skill_coverage", "exploration_coverage", "cost_per_gain"]
+        tags: ["observability", "metrics"]
+        description: >-
+          A PG/SG/GG + cost dashboard exists (logs/dashboard.html). Extend it with active-exploration health:
+          skill-bank coverage, novelty/coverage over time, self-verified task rate, and cost-per-gain.
+        acceptance_criteria:
+          - "Dashboard shows fitness gains and exploration coverage trends over time."
+          - "Cost-per-gain is displayed per epic/run."
+
+      - id: "EL_OBS_004"
+        title: "Cost & Budget Governor"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["EL_OBS_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["cost_per_task", "budget_adherence"]
+        tags: ["observability", "cost"]
+        description: >-
+          NET-NEW. The loop multiplies LLM calls (generate + judge + failure analysis + skill synthesis +
+          skill test + oracle synthesis + exploration). Track REAL (not estimated) token/cost usage, enforce
+          per-task/session budgets, and feed the budget signal to the explore/exploit controller.
+        acceptance_criteria:
+          - "Per-task and per-session budgets are enforced."
+          - "Real token/cost usage is tracked and surfaced to the controller."

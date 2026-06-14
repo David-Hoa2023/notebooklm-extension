@@ -1,0 +1,43 @@
+project:
+  name: "Evolutionary-Coding-Agent"
+  seed: 42
+  version: "1.2.0"
+
+llm:
+  model: "gemini-2.5-flash"
+  embedding_model: "gemini-embedding-001"
+  temperature: 0.1
+  max_output_tokens: 4096
+
+sandbox:
+  image_name: "python:3.10-slim"
+  cpu_limit: 1.0
+  mem_limit: "256m"
+  timeout_seconds: 10
+  refuse_fallback: true
+
+
+memory:
+  sqlite_db_path: "data/memory/memory.db"
+  dedup_threshold: 0.85
+  max_capacity: 500
+  decay_rate: 0.01  # decay per hour
+  use_reranker: true
+  weights:
+    relevance: 0.5
+    importance: 0.3
+    recency: 0.2
+
+observability:
+  log_dir: "logs"
+  trace_file: "logs/trace.jsonl"
+  dashboard_file: "logs/dashboard.html"
+
+exploration:
+  max_tasks_per_run: 4
+  probe_before_solve: true
+  epsilon: 0.35
+  min_epsilon: 0.1
+  budget_tokens: 200000
+
+

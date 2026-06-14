@@ -1,0 +1,26 @@
+# Task List — Hardening Active Exploration
+
+- [x] Fix stale documentation statistics and references
+  - [x] Correct validation_gate.py line counts (292 -> 270) in `walkthrough.md`, `memory.md`, and `doc/walkthrough-evolutionary-loop.md`
+  - [x] Update novelty range to 0.14-0.24 in `memory.md` and `doc/walkthrough-evolutionary-loop.md`
+- [x] Add interpretation caveats in all walkthroughs and project memory
+  - [x] Taxonomy Keyword Coverage vs Verified Skill Mastery caveat
+  - [x] Smoke Test Warning ($n=6$) caveat with sandbox runtime failures mentioned
+- [x] Harden Oracle Synthesis & Validation (`src/exploration/oracle_synthesis.py`)
+  - [x] Statically reject test_code or hidden_test_code containing `pytest` imports
+  - [x] Reject oracles failing the known-bad solution run with a `pytest`/`ModuleNotFoundError` runtime error
+  - [x] Extract expected function names from task description and require them to be present in test code
+- [x] Implement Backlog & Governor Tasks (`src/exploration/exploration_loop.py` and others)
+  - [x] **EL_OBS_004**: Implement hard stop budget/cost governor when remaining tokens reach 0
+  - [x] **EL_MEM_009**: Implement regression suite re-testing of solved tasks after each exploration batch
+  - [x] Add a pre-solve signature probe before code generation
+- [x] Improve observablity & metrics
+  - [x] Split Keyword (Taxonomy) Coverage vs Skill-Backed Coverage
+  - [x] Track coverage delta per exploration pass
+  - [x] Log failed exploration stderr into HTML dashboard
+  - [x] Add per-seed breakdown panel
+- [x] Add Tests
+  - [x] Unit test for `_escape_unescaped_newlines` with malformed JSON samples in `tests/test_exploration.py`
+  - [x] Mock test for oracle rejection of pytest imports in `tests/test_exploration.py`
+  - [x] Mock test for function name presence check in `tests/test_exploration.py`
+  - [x] Integration test that `validation_gate.validate_solution` returns `execution_mode` in metadata in `tests/test_validation_integration.py`
