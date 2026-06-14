@@ -24,7 +24,7 @@ Last updated: 2026-06-14. Living record of audits, Phase 5 work, and verificatio
    - `doc/walkthrough-evolutionary-loop.md` (Vietnamese)
    - `memory.md` — stale June 13 audit table archived under "Historical Audit"
 
-5. **Tests** — **23 collected** (adds `test_validation_integration`; re-run full suite to confirm pass count)
+5. **Tests** — **24 collected** (adds unit tests for `_escape_unescaped_newlines`, `pytest-ban` in test_code and hidden_test_code, exact function name verification, and integration validation for `execution_mode`).
 
 ### Verified E2E metrics (`calculate_metrics()`)
 
@@ -58,12 +58,8 @@ Last updated: 2026-06-14. Living record of audits, Phase 5 work, and verificatio
 
 ### Next steps (priority)
 
-1. Diagnose 2 `failed_runtime_error` tasks; add lessons to `lesson.md`.
-2. Re-run explore with `max_tasks_per_run: 4` for larger sample.
-3. Implement **`EL_OBS_004`** — cost & budget governor (hard stop on `budget_tokens`).
-4. Implement **`EL_MEM_009`** — regression re-test of solved tasks after each batch.
-5. Split dashboard coverage into **keyword coverage** vs **skill-backed coverage**.
-6. Add unit tests for `_escape_unescaped_newlines` and oracle `pytest` rejection.
+1. **Phase 6 Statistical Significance Improvement**: Increase E2E seeds to 6+ (`seeds = [42..47]`) during `run-all` to achieve $p < 0.05$ significance on Stability Gain.
+2. **Close Coverage Gaps**: Propose and solve testing-related tasks to close the final verified skill gap (`testing`).
 
 ---
 
@@ -125,14 +121,14 @@ Requires `GEMINI_API_KEY` and Docker (`refuse_fallback: true`).
 
 ## Test status
 
-- **23 collected** — `test_exploration` (8), `test_lifecycle` (4), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1+)
-- Run: `.venv\Scripts\python -m pytest` (~30–40s)
+- **24 collected** — `test_exploration` (12), `test_lifecycle` (3), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1)
+- Run: `.venv\Scripts\python -m pytest` (~25s)
 
 ---
 
 ## Backlog snapshot
 
-**evolutionary-loop.yaml:** 21 done, 2 todo (`EL_MEM_009`, `EL_OBS_004`)
+**evolutionary-loop.yaml:** 23 done, 0 todo (all Phase 5 Hardening and Phase 6 Observability items done)
 
 **Evolutionary-Coding-Agent.yaml:** 24 done, 0 in_progress, 0 todo
 
