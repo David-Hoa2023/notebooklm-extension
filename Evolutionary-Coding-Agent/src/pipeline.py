@@ -20,7 +20,21 @@ class AgentPipeline:
         banned = {'def', 'class', 'import', 'from', 'dict', 'list', 'str', 'int', 'float', 'bool', 'set', 'tuple', 'any', 'None', 'ValueError', 'TypeError', 'KeyError', 'Exception', 'return', 'if', 'else', 'for', 'while', 'in', 'and', 'or', 'not', 'is', 'lambda'}
         return sorted([c for c in candidates if c not in banned])
 
-    def execute_task(self, task: dict, probe_context: str = "") -> dict:
+    def _extract_function_params(self, code: str) -> dict[str, list[str]]:
+        """Extract mapping from function name to its parameter list using AST."""
+        try:
+            tree = ast.parse(code)
+        except Exception:
+            return {}
+        
+        funcs = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                params = [arg.arg for arg in node.args.args]
+                funcs[node.name] = params
+        return funcs
+
+    def execute_task(self, task: dict, probe_context: str = "", seed: int | None = None) -> dict:
         """
         Executes a single curriculum task.
         1. Retrieve memories (if memory enabled).
@@ -74,9 +88,11 @@ class AgentPipeline:
         while retry_count < max_retries:
             # 2. Construct prompt
             system_instruction = (
-                "Bạn là một lập trình viên Python lão luyện có tư duy logic sắc bén. "
-                "Nhiệm vụ của bạn là viết một giải pháp Python tối ưu, ngắn gọn để giải quyết yêu cầu bài toán. "
-                "Chỉ xuất phần code Python hoàn chỉnh nằm trong block ```python ... ```, không giải thích gì thêm."
+                "You are an expert Python developer. Write a clean, optimal Python solution to solve the task.\n"
+                "CRITICAL REQUIREMENTS:\n"
+                "1. Write ONLY complete Python code inside a single ```python ... ``` block.\n"
+                "2. DO NOT include any comments (no lines starting with #), docstrings (no triple-quoted strings), or explanations.\n"
+                "3. Ensure the implementation is complete and not truncated. Do not stop generating until the code is fully closed."
             )
             
             prompt = ""
@@ -103,7 +119,7 @@ class AgentPipeline:
             if reflexion_context:
                 prompt += reflexion_context
                 
-            prompt += "\nHãy viết code giải pháp của bạn dưới đây:\n"
+            prompt += "\nWrite your Python solution inside a single ```python ... ``` block. Absolutely NO comments (#), docstrings, or explanations:\n"
             
             # 3. Call LLM to generate solution
             if retry_count == 0:
@@ -123,6 +139,60 @@ class AgentPipeline:
                 # Extract code from markdown blocks
                 code_solution = self._clean_code_output(generated_output)
                 
+                # AST arity check against baseline to prevent signature drift (P1 mitigation)
+                if seed is not None and self.memory_enabled:
+                    # Find the successful baseline run for this task and seed
+                    from src.observability import observability_manager
+                    runs = observability_manager.load_all_runs()
+                    baseline_runs = [
+                        r for r in runs
+                        if r.get("task_id") == task_id
+                        and r.get("seed") == seed
+                        and r.get("pass_type") == "baseline"
+                        and r.get("status") == "passed"
+                    ]
+                    if baseline_runs:
+                        baseline_code = baseline_runs[-1].get("metadata", {}).get("code", "")
+                        if baseline_code:
+                            baseline_params = self._extract_function_params(baseline_code)
+                            current_params = self._extract_function_params(code_solution)
+                            drift_detected = False
+                            drift_err_msg = ""
+                            for sig in baseline_params:
+                                if sig in current_params:
+                                    base_arity = len(baseline_params[sig])
+                                    curr_arity = len(current_params[sig])
+                                    if base_arity != curr_arity:
+                                        drift_detected = True
+                                        drift_err_msg = (
+                                            f"Signature drift error: Parameter count mismatch for function '{sig}'. "
+                                            f"Baseline expected {base_arity} parameters ({', '.join(baseline_params[sig])}), "
+                                            f"but got {curr_arity} parameters ({', '.join(current_params[sig])})."
+                                        )
+                                        break
+                            
+                            if drift_detected:
+                                print(f"[{task_id}] {drift_err_msg}")
+                                # Trigger failed_tests to enter Reflexion self-correction loop
+                                val_res = {
+                                    "status": "failed_tests",
+                                    "score": 0.0,
+                                    "message": drift_err_msg,
+                                    "insight": "Duy trì chính xác signature và số lượng tham số như baseline.",
+                                    "visible_pass_fraction": 0.0,
+                                    "hidden_pass_fraction": 0.0,
+                                    "overfit_gap": 0.0
+                                }
+                                retry_count += 1
+                                reflexion_context = (
+                                    f"\n=== LẦN THỬ TRƯỚC BỊ LỖI (failed_tests) ===\n"
+                                    f"Đoạn code đã sinh lỗi:\n```python\n{code_solution}\n```\n"
+                                    f"Thông tin lỗi/Nhận xét phản hồi: {drift_err_msg}\n"
+                                    f"Bài học rút ra từ lỗi này: Không thay đổi signature hoặc thêm bớt tham số của hàm so với baseline.\n"
+                                    "Hãy phân tích và viết lại đoạn code mới khắc phục hoàn toàn lỗi trên."
+                                )
+                                continue
+                                
             except Exception as e:
                 print(f"[{task_id}] Generation failed: {e}")
                 val_res = {

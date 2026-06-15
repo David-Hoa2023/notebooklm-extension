@@ -6,6 +6,7 @@ from src.memory.validation_gate import validation_gate
 from src.skill.skill_manager import skill_manager
 from src.pipeline import AgentPipeline
 from src.observability import observability_manager
+from src.config import config_instance
 
 class EvaluationFramework:
     def __init__(self):
@@ -23,6 +24,7 @@ class EvaluationFramework:
         
         for seed in seeds:
             print(f"\n--- Running Seed {seed} ---")
+            config_instance.set_seed(seed)
             # Clear database to prevent leakage
             memory_engine.clear_all()
             
@@ -32,7 +34,7 @@ class EvaluationFramework:
             for t in all_eval_tasks:
                 start_time = time.time()
                 # Run task
-                res = pipeline.execute_task(t)
+                res = pipeline.execute_task(t, seed=seed)
                 duration = time.time() - start_time
                 
                 # Check pass type
@@ -71,6 +73,7 @@ class EvaluationFramework:
         
         for seed in seeds:
             print(f"\n--- Running Seed {seed} ---")
+            config_instance.set_seed(seed)
             # Clear database at start of seed
             memory_engine.clear_all()
             
@@ -87,7 +90,7 @@ class EvaluationFramework:
                 # All writing is deferred to the Consolidation step.
                 thread_pipeline = AgentPipeline(memory_enabled=True, frozen_memory=True)
                 start_time = time.time()
-                res = thread_pipeline.execute_task(task)
+                res = thread_pipeline.execute_task(task, seed=seed)
                 duration = time.time() - start_time
                 return task, res, duration
 
@@ -144,7 +147,7 @@ class EvaluationFramework:
             print(f"Executing {len(complex_tasks)} complex tasks sequentially...")
             for t in complex_tasks:
                 start_time = time.time()
-                res = pipeline.execute_task(t)
+                res = pipeline.execute_task(t, seed=seed)
                 duration = time.time() - start_time
                 
                 # Log run
@@ -172,6 +175,7 @@ class EvaluationFramework:
         
         for seed in seeds:
             print(f"\n--- Running Seed {seed} (Frozen Memory) ---")
+            config_instance.set_seed(seed)
             # Restore memory snapshot for this seed
             success = memory_engine.restore_snapshot(f"seed_{seed}")
             if not success:
@@ -183,7 +187,7 @@ class EvaluationFramework:
             
             for t in tasks:
                 start_time = time.time()
-                res = pipeline.execute_task(t)
+                res = pipeline.execute_task(t, seed=seed)
                 duration = time.time() - start_time
                 
                 # Log run
@@ -208,6 +212,7 @@ class EvaluationFramework:
         
         for seed in seeds:
             print(f"\n--- Running Seed {seed} on Held-Out tasks ---")
+            config_instance.set_seed(seed)
             # Restore memory snapshot for this seed
             success = memory_engine.restore_snapshot(f"seed_{seed}")
             if not success:
@@ -219,7 +224,7 @@ class EvaluationFramework:
             
             for t in held_out_tasks:
                 start_time = time.time()
-                res = pipeline.execute_task(t)
+                res = pipeline.execute_task(t, seed=seed)
                 duration = time.time() - start_time
                 
                 # Log run

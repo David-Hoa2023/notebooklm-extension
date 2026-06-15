@@ -87,7 +87,11 @@ class SkillGapAnalyzer:
         }
 
     def top_gaps(self, limit: int = 3) -> list[str]:
-        return self.analyze()["gap_capabilities"][:limit]
+        res = self.analyze()
+        gaps = res.get("skill_backed_gap_capabilities", [])
+        if not gaps:
+            gaps = res.get("gap_capabilities", [])
+        return gaps[:limit]
 
 
 skill_gap_analyzer = SkillGapAnalyzer()

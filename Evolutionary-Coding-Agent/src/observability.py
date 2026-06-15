@@ -89,15 +89,26 @@ class ObservabilityManager:
         import math
         n = len(x)
         if n <= 1:
-            return 0.0, 1.0
+            return 0.0, 1.0, 0.5, 0.5
         differences = np.array(y) - np.array(x)
         mean_diff = np.mean(differences)
         std_diff = np.std(differences, ddof=1)
         if std_diff == 0:
-            return 0.0, 1.0 if mean_diff == 0 else 0.0
+            if mean_diff == 0:
+                return 0.0, 1.0, 0.5, 0.5
+            elif mean_diff > 0:
+                return float('inf'), 0.0, 0.0, 1.0
+            else:
+                return float('-inf'), 0.0, 1.0, 0.0
+                
         t_stat = mean_diff / (std_diff / math.sqrt(n))
-        p_val = 1.0 - math.erf(abs(t_stat) / math.sqrt(2.0))
-        return float(t_stat), float(p_val)
+        # Two-sided p-value
+        p_val_two = 1.0 - math.erf(abs(t_stat) / math.sqrt(2.0))
+        # One-sided p-values using standard normal cumulative distribution approximation
+        phi = 0.5 * (1.0 + math.erf(t_stat / math.sqrt(2.0)))
+        p_val_greater = 1.0 - phi  # Alternative: y > x (second_pass > baseline)
+        p_val_less = phi         # Alternative: y < x (second_pass < baseline)
+        return float(t_stat), float(p_val_two), float(p_val_greater), float(p_val_less)
 
     def calculate_metrics(self) -> dict:
         """
@@ -153,8 +164,13 @@ class ObservabilityManager:
             second_pass_paired.append(second_pass_map[k])
             
         t_stat, p_value = None, None
+        p_val_greater, p_val_less = None, None
+        mean_b, mean_s, mean_delta = 0.0, 0.0, 0.0
         if len(common_keys) > 1:
-            t_stat, p_value = self.paired_t_test(baseline_paired, second_pass_paired)
+            t_stat, p_value, p_val_greater, p_val_less = self.paired_t_test(baseline_paired, second_pass_paired)
+            mean_b = float(np.mean(baseline_paired))
+            mean_s = float(np.mean(second_pass_paired))
+            mean_delta = mean_s - mean_b
 
         # Group tasks into lists
         all_task_ids = sorted(list(set(r["task_id"] for r in runs)))
@@ -318,6 +334,11 @@ class ObservabilityManager:
                 "total_runs": len(runs) + len(explore_tasks_run),
                 "sandbox_fallback_detected": sandbox_fallback_detected,
                 "p_value": p_value,
+                "p_value_one_sided_greater": p_val_greater,
+                "p_value_one_sided_less": p_val_less,
+                "mean_baseline": mean_b,
+                "mean_second_pass": mean_s,
+                "mean_delta": mean_delta,
                 "t_stat": t_stat
             },
             "exploration": {
@@ -680,7 +701,7 @@ class ObservabilityManager:
                 <div class="card-desc">Khả năng tổng quát trên Held-out tasks</div>
             </div>
             <div class="card" id="p-val-card">
-                <div class="card-label">Kiểm định p-value</div>
+                <div class="card-label">Chênh lệch Baseline vs Second-Pass</div>
                 <div class="card-value" id="p-val">N/A</div>
                 <div class="card-desc" id="p-desc">So sánh t-test (p &lt; 0.05 là tối ưu)</div>
             </div>
@@ -830,14 +851,25 @@ class ObservabilityManager:
         
         if (summary.p_value !== null && summary.p_value !== undefined) {{
             const pv = summary.p_value;
+            const delta = summary.mean_delta || 0.0;
+            const direction = delta >= 0 ? "Second-Pass cao hơn" : "Second-Pass thấp hơn";
             pValText.innerText = pv.toFixed(4);
+            
+            let oneSidedText = "";
+            if (summary.p_value_one_sided_greater !== null) {{
+                oneSidedText = `<br>One-sided p (S > B): ${{summary.p_value_one_sided_greater.toFixed(4)}}`;
+            }}
+            if (summary.p_value_one_sided_less !== null) {{
+                oneSidedText += `, (S < B): ${{summary.p_value_one_sided_less.toFixed(4)}}`;
+            }}
+            
             if (pv < 0.05) {{
                 pCard.classList.add('success');
                 pValText.style.color = 'var(--success)';
-                pDescText.innerHTML = `Có ý nghĩa thống kê (p = ${{pv.toFixed(4)}} < 0.05)`;
+                pDescText.innerHTML = `Chênh lệch có ý nghĩa thống kê (p = ${{pv.toFixed(4)}} < 0.05).<br>Mean Delta = ${{delta.toFixed(2)}} (${{direction}} Baseline).${{oneSidedText}}`;
             }} else {{
                 pValText.style.color = 'var(--warning)';
-                pDescText.innerHTML = `Ít ý nghĩa thống kê (p = ${{pv.toFixed(4)}} >= 0.05)`;
+                pDescText.innerHTML = `Chênh lệch ít ý nghĩa thống kê (p = ${{pv.toFixed(4)}} >= 0.05).<br>Mean Delta = ${{delta.toFixed(2)}} (${{direction}} Baseline).${{oneSidedText}}`;
             }}
         }} else {{
             pValText.innerText = "N/A";

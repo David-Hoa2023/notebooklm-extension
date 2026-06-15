@@ -33,7 +33,7 @@ class ExplorationLoop:
             prev_score = prev_runs[-1]["score"] if prev_runs else 0.0
             
             start = time.time()
-            res = pipeline.execute_task(task)
+            res = pipeline.execute_task(task, seed=seed)
             duration = time.time() - start
             
             score_delta = res["score"] - prev_score
@@ -60,6 +60,7 @@ class ExplorationLoop:
         Active exploration pass: propose -> probe -> solve -> verify -> consolidate.
         Implements EL_EXPLORE_001 through EL_EXPLORE_006 orchestration.
         """
+        config_instance.set_seed(seed)
         num_tasks = num_tasks or config_instance.get("exploration.max_tasks_per_run", 2)
         probe_enabled = config_instance.get("exploration.probe_before_solve", True)
 
@@ -183,7 +184,7 @@ class ExplorationLoop:
                 )
 
             start = time.time()
-            res = pipeline.execute_task(task, probe_context=probe_context)
+            res = pipeline.execute_task(task, probe_context=probe_context, seed=seed)
             duration = time.time() - start
 
             res["exploration"] = proposed_meta

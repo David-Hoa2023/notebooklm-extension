@@ -35,7 +35,11 @@ class Config:
         random.seed(seed)
         np.random.seed(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
-
+    def set_seed(self, seed: int):
+        if "project" not in self.data:
+            self.data["project"] = {}
+        self.data["project"]["seed"] = seed
+        self.setup_seeds()
     def get(self, key_path: str, default=None):
         keys = key_path.split(".")
         current = self.data

@@ -33,6 +33,18 @@ Các lệnh khả dụng:
   run-all           Chạy tuần tự toàn bộ quy trình trên và sinh báo cáo
 """)
 
+
+def archive_trace_file():
+    trace_path = observability_manager.trace_file
+    if os.path.exists(trace_path):
+        import time
+        archived_path = f"logs/trace_archived_{int(time.time())}.jsonl"
+        try:
+            os.rename(trace_path, archived_path)
+            print(f"Archived existing trace file to {archived_path}")
+        except Exception as e:
+            print(f"Failed to archive trace file: {e}")
+
 def main():
     if len(sys.argv) < 2:
         print_help()
@@ -40,14 +52,27 @@ def main():
         
     cmd = sys.argv[1].lower()
     
-    # Default is [42, 43, 44] for full statistical rigor.
-    seeds = [42, 43, 44]
+    # Default is [42, 43, 44, 45, 46, 47] for full statistical rigor.
+    seeds = [42, 43, 44, 45, 46, 47]
+    if "--seeds" in sys.argv:
+        try:
+            idx = sys.argv.index("--seeds")
+            seeds_str = sys.argv[idx + 1]
+            seeds = [int(x.strip()) for x in seeds_str.split(",")]
+            # Remove --seeds and its argument from sys.argv so positional checks still work
+            sys.argv.pop(idx + 1)
+            sys.argv.pop(idx)
+        except Exception as e:
+            print(f"Error parsing --seeds option: {e}. Using default seeds: {seeds}")
+            
+    print(f"Chạy thực nghiệm với các seeds: {seeds}")
     
     if cmd == "init-curriculum":
         curriculum_manager.load_or_create_tasks()
         print("Curriculum tasks initialized successfully in data/curriculum/tasks.json.")
         
     elif cmd == "baseline":
+        archive_trace_file()
         eval_framework.run_baseline(seeds=seeds)
         print("Baseline evaluation completed.")
         
@@ -89,6 +114,7 @@ def main():
         print("=========================================================")
         
         # 0. Init
+        archive_trace_file()
         curriculum_manager.load_or_create_tasks()
         
         # 1. Baseline

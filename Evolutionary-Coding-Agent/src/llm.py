@@ -31,8 +31,8 @@ class GeminiClient:
             "seed": seed,
         }
         
-        if not json_mode:
-            config_args["max_output_tokens"] = config_instance.get("llm.max_output_tokens", 4096)
+        # Do not set max_output_tokens as it causes early truncation in gemini-2.5-flash
+        pass
             
         if system_instruction:
             config_args["system_instruction"] = system_instruction

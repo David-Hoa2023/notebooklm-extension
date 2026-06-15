@@ -68,6 +68,15 @@ class CurriculumProposer:
             "and target the listed skill gaps. Return JSON only."
         )
 
+        testing_instruction = ""
+        if "testing" in gap_targets:
+            testing_instruction = (
+                "- CRITICAL: Since 'testing' is a target skill gap, the task MUST require the agent to write "
+                "custom assertions, test validation helpers, or test suites checking implementations for correctness, "
+                "using Python standard 'unittest' or 'assert' style. The function signature should receive test cases/results "
+                "or run testing validation logic."
+            )
+
         prompt = f"""
 Recent agent success rate: {success_rate:.0%}
 Target difficulty (ZPD): {difficulty}
@@ -79,6 +88,7 @@ Design a novel Python coding task with:
 - A clear function signature requirement in the description
 - Testable behavior (no external APIs, no files unless trivial)
 - Difficulty aligned to {difficulty}
+{testing_instruction}
 """
 
         res_str = self.llm.generate(

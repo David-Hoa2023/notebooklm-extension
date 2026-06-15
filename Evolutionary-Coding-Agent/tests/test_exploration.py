@@ -115,3 +115,25 @@ def test_oracle_rejects_pytest_in_hidden():
     assert passed is False
     assert "pytest" in reason
 
+
+def test_top_gaps_logic():
+    analyzer = SkillGapAnalyzer()
+    
+    # Case 1: skill-backed gaps are non-empty
+    mock_analyze_results_1 = {
+        "gap_capabilities": ["math_evaluation", "regex"],
+        "skill_backed_gap_capabilities": ["json_parsing", "testing"]
+    }
+    with patch.object(analyzer, 'analyze', return_value=mock_analyze_results_1):
+        gaps = analyzer.top_gaps(limit=3)
+        assert gaps == ["json_parsing", "testing"]
+        
+    # Case 2: skill-backed gaps are empty, fallback to keyword gaps
+    mock_analyze_results_2 = {
+        "gap_capabilities": ["math_evaluation", "regex"],
+        "skill_backed_gap_capabilities": []
+    }
+    with patch.object(analyzer, 'analyze', return_value=mock_analyze_results_2):
+        gaps = analyzer.top_gaps(limit=3)
+        assert gaps == ["math_evaluation", "regex"]
+
