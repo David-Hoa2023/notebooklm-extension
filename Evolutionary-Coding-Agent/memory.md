@@ -1,8 +1,33 @@
 # Project Memory — Evolutionary Coding Agent
 
-Last updated: 2026-06-16 (morning). Living record of audits, Phase 5 hardening, Phase 6 evidence, and verification status.
+Last updated: 2026-06-16 (afternoon). Living record of audits, Phase 5 hardening, Phase 6 evidence, and verification status.
 
 ---
+
+## Session log (June 16, 2026 — afternoon)
+
+### What was accomplished
+
+1. **Repaired Corrupted Skill**: Fixed the `validate_list_lengths_match` skill in the database by replacing the Vietnamese prose description with its correct Python functional code. The repair was fully verified in Docker using `skill_tester_instance` and updated back into `data/memory/memory.db` as retrievable (`retrievable: True`).
+2. **Dedup Bug Resolution & Prevention**: Documented the root cause of the skill corruption (an insight-style merge of skills that mistakenly replaced Python code with prose during consolidation/deduplication) and the namespace-aware merge prompt fix that prevents recurrence.
+3. **E2E 100% Coverage Verification**: Confirmed that all 10 out of 10 capabilities in the taxonomy are backed by active, verified skills (100% coverage).
+4. **Epsilon Restoration**: Reverted `exploration.epsilon` to `0.35` and `min_epsilon` to `0.1` in `config.yaml` to restore default production policy behavior.
+5. **Snapshot Database Backup**: Created a database snapshot backup at `data/memory_snapshots/memory_repaired_backup.db` so the repaired DB state is easily recoverable.
+
+### Verified E2E metrics
+
+| Metric | Value | Detail |
+|---|---|---|
+| Oracle validation rate | **75.0%** | (Historical) Oracle filters toxic insights and arity drift |
+| Self-proposed success | **66.7%** | (Historical) Self-proposed tasks pass in Docker |
+| Skill-backed coverage | **100.0%** | 10/10 caps (verified active skills cover: algorithms, data_structures, date_time, error_handling, file_io, json_parsing, math_evaluation, regex, string_parsing, testing) |
+
+### Next steps (priority)
+
+1. **Monitor pipeline runs**: Ensure future exploration runs remain robust to corruption under the namespace-aware merge prompt.
+
+---
+
 
 ## Session log (June 16, 2026 — morning)
 

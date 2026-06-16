@@ -36,8 +36,8 @@ observability:
 exploration:
   max_tasks_per_run: 4
   probe_before_solve: true
-  epsilon: 1.0
-  min_epsilon: 1.0
+  epsilon: 0.35
+  min_epsilon: 0.1
   budget_tokens: 200000
 
 
