@@ -7,3 +7,4 @@ data/memory/memory.db
 data/memory_snapshots/
 logs/
 .code-workspace
+scratch/

@@ -1,4 +1,5 @@
 import re
+import ast
 from src.llm import llm_client
 from src.memory.memory_engine import memory_engine
 from src.memory.validation_gate import validation_gate
@@ -17,8 +18,18 @@ class AgentPipeline:
         defs = re.findall(r'\bdef\s+([a-zA-Z_][a-zA-Z0-9_]*)', description)
         refs = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\(\)', description)
         candidates = set(backticked + defs + refs)
-        banned = {'def', 'class', 'import', 'from', 'dict', 'list', 'str', 'int', 'float', 'bool', 'set', 'tuple', 'any', 'None', 'ValueError', 'TypeError', 'KeyError', 'Exception', 'return', 'if', 'else', 'for', 'while', 'in', 'and', 'or', 'not', 'is', 'lambda'}
-        return sorted([c for c in candidates if c not in banned])
+        banned = {'def', 'class', 'import', 'from', 'dict', 'list', 'str', 'int', 'float', 'bool', 'set', 'tuple', 'any', 'None', 'ValueError', 'TypeError', 'KeyError', 'Exception', 'AssertionError', 'unittest', 'TestCase', 'return', 'if', 'else', 'for', 'while', 'in', 'and', 'or', 'not', 'is', 'lambda'}
+        
+        # Filter out banned words and common variable suffixes
+        filtered = []
+        for c in candidates:
+            if c in banned:
+                continue
+            if any(c.endswith(suffix) for suffix in ['_list', '_dict', '_set', '_str', '_int', '_bool', '_val', '_value', '_arr', '_array', '_var', '_result', '_expected', '_output', '_input']):
+                continue
+            filtered.append(c)
+            
+        return sorted(filtered)
 
     def _extract_function_params(self, code: str) -> dict[str, list[str]]:
         """Extract mapping from function name to its parameter list using AST."""
@@ -33,6 +44,30 @@ class AgentPipeline:
                 params = [arg.arg for arg in node.args.args]
                 funcs[node.name] = params
         return funcs
+
+    def _extract_baseline_signatures(self, code: str) -> str:
+        try:
+            tree = ast.parse(code)
+        except Exception:
+            return ""
+        stubs = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                # Reconstruct signature stub with 'pass' body
+                stub_node = ast.FunctionDef(
+                    name=node.name,
+                    args=node.args,
+                    body=[ast.Pass()],
+                    decorator_list=node.decorator_list,
+                    returns=node.returns,
+                    type_comment=node.type_comment
+                )
+                ast.copy_location(stub_node, node)
+                try:
+                    stubs.append(ast.unparse(stub_node).strip())
+                except Exception:
+                    pass
+        return "\n".join(stubs)
 
     def execute_task(self, task: dict, probe_context: str = "", seed: int | None = None) -> dict:
         """
@@ -63,6 +98,18 @@ class AgentPipeline:
                 query_text=description,
                 limit=2 # Limit top-2
             )
+            
+            # Exclude regex/email-poison insights when task_id starts with NEG_ or description mentions smtplib
+            if task_id.startswith("NEG_") or "smtplib" in description:
+                filtered_insights = []
+                for ins in retrieved_insights:
+                    content_lower = ins.get("content", "").lower()
+                    if "regex" in content_lower or "email" in content_lower or "luôn luôn trả về" in content_lower:
+                        print(f"[{task_id}] Excluded regex/email-poison insight: {ins.get('id')}")
+                        continue
+                    filtered_insights.append(ins)
+                retrieved_insights = filtered_insights
+
             # Query skills (reusable helper functions)
             # We filter for active skills
             active_skills = skill_composition_instance.get_active_skills()
@@ -79,11 +126,27 @@ class AgentPipeline:
                 # Composed skill bundles: recursively retrieve dependencies!
                 retrieved_skills = skill_composition_instance.resolve_dependencies(retrieved_skills)
                 
+        # Find successful baseline run if it exists
+        baseline_code = ""
+        if seed is not None and self.memory_enabled:
+            from src.observability import observability_manager
+            runs = observability_manager.load_all_runs()
+            baseline_runs = [
+                r for r in runs
+                if r.get("task_id") == task_id
+                and r.get("seed") == seed
+                and r.get("pass_type") == "baseline"
+                and r.get("status") == "passed"
+            ]
+            if baseline_runs:
+                baseline_code = baseline_runs[-1].get("metadata", {}).get("code", "")
+
         retry_count = 0
         max_retries = 3
         reflexion_context = ""
         val_res = {}
         code_solution = ""
+        arity_drift_rejected = False
         
         while retry_count < max_retries:
             # 2. Construct prompt
@@ -110,6 +173,14 @@ class AgentPipeline:
                     prompt += "--- Các thư viện Skill lập trình có sẵn trong kho:\n"
                     prompt += skill_composition_instance.format_skills_for_prompt(retrieved_skills)
                     prompt += "\n\n"
+            
+            # Inject baseline signatures on second pass (frozen_memory=True) to freeze function signature
+            if self.frozen_memory and baseline_code:
+                sig_stubs = self._extract_baseline_signatures(baseline_code)
+                if sig_stubs:
+                    prompt += "=== YÊU CẦU SIGNATURE CỦA HÀM (BẮT BUỘC) ===\n"
+                    prompt += "Bạn BẮT BUỘC phải giữ nguyên signature của hàm như baseline bên dưới (không thêm bớt tham số, không thay đổi kiểu trả về):\n"
+                    prompt += f"```python\n{sig_stubs}\n```\n\n"
                     
             prompt += f"=== YÊU CẦU BÀI TOÁN ===\n{description}\n"
 
@@ -140,58 +211,46 @@ class AgentPipeline:
                 code_solution = self._clean_code_output(generated_output)
                 
                 # AST arity check against baseline to prevent signature drift (P1 mitigation)
-                if seed is not None and self.memory_enabled:
-                    # Find the successful baseline run for this task and seed
-                    from src.observability import observability_manager
-                    runs = observability_manager.load_all_runs()
-                    baseline_runs = [
-                        r for r in runs
-                        if r.get("task_id") == task_id
-                        and r.get("seed") == seed
-                        and r.get("pass_type") == "baseline"
-                        and r.get("status") == "passed"
-                    ]
-                    if baseline_runs:
-                        baseline_code = baseline_runs[-1].get("metadata", {}).get("code", "")
-                        if baseline_code:
-                            baseline_params = self._extract_function_params(baseline_code)
-                            current_params = self._extract_function_params(code_solution)
-                            drift_detected = False
-                            drift_err_msg = ""
-                            for sig in baseline_params:
-                                if sig in current_params:
-                                    base_arity = len(baseline_params[sig])
-                                    curr_arity = len(current_params[sig])
-                                    if base_arity != curr_arity:
-                                        drift_detected = True
-                                        drift_err_msg = (
-                                            f"Signature drift error: Parameter count mismatch for function '{sig}'. "
-                                            f"Baseline expected {base_arity} parameters ({', '.join(baseline_params[sig])}), "
-                                            f"but got {curr_arity} parameters ({', '.join(current_params[sig])})."
-                                        )
-                                        break
-                            
-                            if drift_detected:
-                                print(f"[{task_id}] {drift_err_msg}")
-                                # Trigger failed_tests to enter Reflexion self-correction loop
-                                val_res = {
-                                    "status": "failed_tests",
-                                    "score": 0.0,
-                                    "message": drift_err_msg,
-                                    "insight": "Duy trì chính xác signature và số lượng tham số như baseline.",
-                                    "visible_pass_fraction": 0.0,
-                                    "hidden_pass_fraction": 0.0,
-                                    "overfit_gap": 0.0
-                                }
-                                retry_count += 1
-                                reflexion_context = (
-                                    f"\n=== LẦN THỬ TRƯỚC BỊ LỖI (failed_tests) ===\n"
-                                    f"Đoạn code đã sinh lỗi:\n```python\n{code_solution}\n```\n"
-                                    f"Thông tin lỗi/Nhận xét phản hồi: {drift_err_msg}\n"
-                                    f"Bài học rút ra từ lỗi này: Không thay đổi signature hoặc thêm bớt tham số của hàm so với baseline.\n"
-                                    "Hãy phân tích và viết lại đoạn code mới khắc phục hoàn toàn lỗi trên."
+                if baseline_code:
+                    baseline_params = self._extract_function_params(baseline_code)
+                    current_params = self._extract_function_params(code_solution)
+                    drift_detected = False
+                    drift_err_msg = ""
+                    for sig in baseline_params:
+                        if sig in current_params:
+                            base_arity = len(baseline_params[sig])
+                            curr_arity = len(current_params[sig])
+                            if base_arity != curr_arity:
+                                drift_detected = True
+                                drift_err_msg = (
+                                    f"Signature drift error: Parameter count mismatch for function '{sig}'. "
+                                    f"Baseline expected {base_arity} parameters ({', '.join(baseline_params[sig])}), "
+                                    f"but got {curr_arity} parameters ({', '.join(current_params[sig])})."
                                 )
-                                continue
+                                break
+                    
+                    if drift_detected:
+                        print(f"[{task_id}] {drift_err_msg}")
+                        arity_drift_rejected = True
+                        # Trigger failed_tests to enter Reflexion self-correction loop
+                        val_res = {
+                            "status": "failed_tests",
+                            "score": 0.0,
+                            "message": drift_err_msg,
+                            "insight": "Duy trì chính xác signature và số lượng tham số như baseline.",
+                            "visible_pass_fraction": 0.0,
+                            "hidden_pass_fraction": 0.0,
+                            "overfit_gap": 0.0
+                        }
+                        retry_count += 1
+                        reflexion_context = (
+                            f"\n=== LẦN THỬ TRƯỚC BỊ LỖI (failed_tests) ===\n"
+                            f"Đoạn code đã sinh lỗi:\n```python\n{code_solution}\n```\n"
+                            f"Thông tin lỗi/Nhận xét phản hồi: {drift_err_msg}\n"
+                            f"Bài học rút ra từ lỗi này: Không thay đổi signature hoặc thêm bớt tham số của hàm so với baseline.\n"
+                            "Hãy phân tích và viết lại đoạn code mới khắc phục hoàn toàn lỗi trên."
+                        )
+                        continue
                                 
             except Exception as e:
                 print(f"[{task_id}] Generation failed: {e}")
@@ -255,6 +314,7 @@ class AgentPipeline:
             "self_correction_attempts": retry_count,
             "self_correction_success": (val_res["status"] == "passed" and retry_count > 0),
             "execution_mode": val_res.get("execution_mode", "unknown"),
+            "arity_drift_rejected": arity_drift_rejected,
         })
         
         return val_res

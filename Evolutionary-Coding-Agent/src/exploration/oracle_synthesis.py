@@ -112,8 +112,18 @@ class OracleSynthesizer:
         refs = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\(\)', description)
         
         candidates = set(backticked + defs + refs)
-        banned = {'def', 'class', 'import', 'from', 'dict', 'list', 'str', 'int', 'float', 'bool', 'set', 'tuple', 'any', 'None', 'ValueError', 'TypeError', 'KeyError', 'Exception', 'return', 'if', 'else', 'for', 'while', 'in', 'and', 'or', 'not', 'is', 'lambda'}
-        return sorted([c for c in candidates if c not in banned])
+        banned = {'def', 'class', 'import', 'from', 'dict', 'list', 'str', 'int', 'float', 'bool', 'set', 'tuple', 'any', 'None', 'ValueError', 'TypeError', 'KeyError', 'Exception', 'AssertionError', 'unittest', 'TestCase', 'return', 'if', 'else', 'for', 'while', 'in', 'and', 'or', 'not', 'is', 'lambda'}
+        
+        # Filter out banned words and common variable suffixes
+        filtered = []
+        for c in candidates:
+            if c in banned:
+                continue
+            if any(c.endswith(suffix) for suffix in ['_list', '_dict', '_set', '_str', '_int', '_bool', '_val', '_value', '_arr', '_array', '_var', '_result', '_expected', '_output', '_input']):
+                continue
+            filtered.append(c)
+            
+        return sorted(filtered)
 
     def _validate_oracle(self, description: str, test_code: str, hidden_test_code: str) -> tuple[bool, str]:
         if not test_code.strip():

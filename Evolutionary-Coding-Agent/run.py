@@ -101,6 +101,7 @@ def main():
         print("=========================================================")
         print("PHASE 5: ACTIVE EXPLORATION")
         print("=========================================================")
+        archive_trace_file()
         curriculum_manager.load_or_create_tasks()
         for seed in seeds:
             print(f"\n--- Exploration Seed {seed} ---")

@@ -72,9 +72,10 @@ class CurriculumProposer:
         if "testing" in gap_targets:
             testing_instruction = (
                 "- CRITICAL: Since 'testing' is a target skill gap, the task MUST require the agent to write "
-                "custom assertions, test validation helpers, or test suites checking implementations for correctness, "
+                "custom assertions, test validation helpers, or self-check test suites checking implementations for correctness, "
                 "using Python standard 'unittest' or 'assert' style. The function signature should receive test cases/results "
-                "or run testing validation logic."
+                "or run testing/assertion validation logic. The resulting skill/helper must be a reusable testing utility "
+                "that performs self-check assertion validations."
             )
 
         prompt = f"""

@@ -57,7 +57,7 @@ def test_cosine_distance_orthogonal_vectors():
 def test_skill_gap_analyzer_finds_gaps(mock_memory, mock_skills):
     mock_skills.get_active_skills.return_value = [
         {
-            "metadata": {"name": "extract_emails", "docstring": "regex email parser"},
+            "metadata": {"name": "extract_emails", "docstring": "regex email parser", "retrievable": True},
             "content": "import re\ndef extract_emails(text): ...",
         }
     ]
@@ -119,14 +119,14 @@ def test_oracle_rejects_pytest_in_hidden():
 def test_top_gaps_logic():
     analyzer = SkillGapAnalyzer()
     
-    # Case 1: skill-backed gaps are non-empty
+    # Case 1: skill-backed gaps are non-empty, contains 'testing' -> targets 'testing' only
     mock_analyze_results_1 = {
         "gap_capabilities": ["math_evaluation", "regex"],
         "skill_backed_gap_capabilities": ["json_parsing", "testing"]
     }
     with patch.object(analyzer, 'analyze', return_value=mock_analyze_results_1):
         gaps = analyzer.top_gaps(limit=3)
-        assert gaps == ["json_parsing", "testing"]
+        assert gaps == ["testing"]
         
     # Case 2: skill-backed gaps are empty, fallback to keyword gaps
     mock_analyze_results_2 = {

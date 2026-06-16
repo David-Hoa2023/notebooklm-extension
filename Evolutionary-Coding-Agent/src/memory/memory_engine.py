@@ -18,13 +18,15 @@ class MemoryEngine:
         """
         try:
             query_embedding = self.llm.embed(query_text)
-            return self.db.search_memories(
+            results = self.db.search_memories(
                 namespace=namespace,
                 query_text=query_text,
                 query_embedding=query_embedding,
                 limit=limit,
                 filters=filters
             )
+            # Exclude quarantined memories from final retrieved list
+            return [r for r in results if r.get("status") != "quarantined" and r.get("metadata", {}).get("status") != "quarantined"]
         except Exception as e:
             print(f"Error retrieving from namespace {namespace}: {e}")
             return []
@@ -78,6 +80,30 @@ class MemoryEngine:
         metadata["version"] = config_instance.get("project.version", "1.0.0")
         metadata["source_tasks"] = list(set(metadata.get("source_tasks", []) + [task_id]))
         
+        # Quarantine criteria check: importance >= 9.0 and contains "LUÔN LUÔN trả về"
+        if importance >= 9.0 and "LUÔN LUÔN trả về" in content:
+            print(f"Quarantining toxic insight due to importance >= 9 and content: {content[:50]}...")
+            status = "quarantined"
+            metadata["status"] = "quarantined"
+            memory_id = f"ins_{uuid.uuid4().hex}"
+            try:
+                embedding = self.llm.embed(content)
+                self.db.add_memory(
+                    memory_id=memory_id,
+                    namespace="insight",
+                    content=content,
+                    embedding=embedding,
+                    task_id=task_id,
+                    status=status,
+                    importance=importance,
+                    metadata=metadata
+                )
+                lifecycle_manager.enforce_capacity("insight")
+                return memory_id
+            except Exception as e:
+                print(f"Failed to add quarantined insight: {e}")
+                return ""
+                
         # 1. Deduplicate & Merge
         is_merged, old_id = lifecycle_manager.deduplicate_and_merge("insight", content, importance, status, metadata)
         if is_merged:

@@ -18,13 +18,14 @@ Last updated: 2026-06-16 (morning). Living record of audits, Phase 5 hardening, 
 
 | Metric | Value | Detail |
 |--------|-------|--------|
-| Oracle validation rate | **75.0%** | Oracle checks successfully filters toxic insights and signature drift |
-| Self-proposed success | **66.7%** | Self-proposed exploration tasks executed and passed in Docker |
+| Oracle validation rate | **75.0%** | (Historical) Oracle checks successfully filters toxic insights and signature drift |
+| Self-proposed success | **66.7%** | (Historical) Self-proposed exploration tasks executed and passed in Docker |
 | Skill-backed coverage | **90.0%** | 9/10 caps (verified active skills cover: algorithms, data_structures, date_time, error_handling, file_io, json_parsing, math_evaluation, regex, string_parsing) |
 | PG (mean) | **+0.167** | Average of task-level PG over 6 seeds (SUB_001, SUB_002, SUB_003, COMPLEX_001) |
 | SG (mean) | **+0.104** | Average of task-level SG over 6 seeds showing stability and recovery |
+| GG (mean) | **-0.083** | Average of task-level GG on held-out tasks over 6 seeds |
 | Mean Delta (S - B) | **+0.233** | Baseline vs Second-Pass score difference (including NEG_001) |
-| p-value | **0.7201** | Paired t-test for baseline vs second-pass score difference over 6 seeds (including NEG_001) |
+| p-value (paired t-test S vs B) | **0.7201** | Paired t-test for baseline vs second-pass score difference over 6 seeds (including NEG_001) |
 
 ### Next steps (priority)
 

@@ -62,8 +62,8 @@ class SkillGapAnalyzer:
             covered |= inferred
             
             # Skill-backed coverage: only from active, verified skills (excluding insights)
-            # Typically verified skills have metadata retrievable=True or status=success
-            if meta.get("retrievable", False) or meta.get("status") == "success":
+            # Typically verified skills have metadata retrievable=True
+            if meta.get("retrievable", False):
                 skill_backed_covered |= inferred
 
         insights = memory_engine.get_all_memories(namespace="insight")
@@ -91,6 +91,9 @@ class SkillGapAnalyzer:
         gaps = res.get("skill_backed_gap_capabilities", [])
         if not gaps:
             gaps = res.get("gap_capabilities", [])
+        # Target testing only: if testing is one of the gaps, target it exclusively
+        if "testing" in gaps:
+            return ["testing"]
         return gaps[:limit]
 
 

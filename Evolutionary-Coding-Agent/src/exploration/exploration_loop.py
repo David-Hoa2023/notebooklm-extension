@@ -150,6 +150,7 @@ class ExplorationLoop:
                             "reason": oracle.rejection_reason,
                         },
                     )
+                    avoid_topics.append(proposed.title)
                     continue
 
                 task = oracle_synthesizer.to_task_dict(proposed, oracle)

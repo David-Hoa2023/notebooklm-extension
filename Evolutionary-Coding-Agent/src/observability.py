@@ -172,6 +172,28 @@ class ObservabilityManager:
             mean_s = float(np.mean(second_pass_paired))
             mean_delta = mean_s - mean_b
 
+        # Calculate paired t-test for H2 (Stability Gain on training tasks: first_pass vs second_pass)
+        first_pass_paired_h2 = []
+        second_pass_paired_h2 = []
+        first_pass_map_h2 = {}
+        second_pass_map_h2 = {}
+        
+        for r in runs:
+            if r["pass_type"] == "first_pass":
+                first_pass_map_h2[(r["task_id"], r["seed"])] = r["score"]
+            elif r["pass_type"] == "second_pass":
+                second_pass_map_h2[(r["task_id"], r["seed"])] = r["score"]
+                
+        common_keys_h2 = sorted(list(set(first_pass_map_h2.keys()).intersection(second_pass_map_h2.keys())))
+        for k in common_keys_h2:
+            first_pass_paired_h2.append(first_pass_map_h2[k])
+            second_pass_paired_h2.append(second_pass_map_h2[k])
+            
+        t_stat_h2, p_value_h2 = None, None
+        p_val_greater_h2, p_val_less_h2 = None, None
+        if len(common_keys_h2) > 1:
+            t_stat_h2, p_value_h2, p_val_greater_h2, p_val_less_h2 = self.paired_t_test(first_pass_paired_h2, second_pass_paired_h2)
+
         # Group tasks into lists
         all_task_ids = sorted(list(set(r["task_id"] for r in runs)))
         
@@ -336,6 +358,9 @@ class ObservabilityManager:
                 "p_value": p_value,
                 "p_value_one_sided_greater": p_val_greater,
                 "p_value_one_sided_less": p_val_less,
+                "p_value_h2_two_sided": p_value_h2,
+                "p_value_h2_one_sided_greater": p_val_greater_h2,
+                "p_value_h2_one_sided_less": p_val_less_h2,
                 "mean_baseline": mean_b,
                 "mean_second_pass": mean_s,
                 "mean_delta": mean_delta,
@@ -712,6 +737,23 @@ class ObservabilityManager:
             </div>
         </div>
 
+        <!-- Hypotheses Section -->
+        <div class="card" style="margin-bottom: 2.5rem; background: rgba(30, 41, 59, 0.4); border-color: rgba(139, 92, 246, 0.2); padding: 1.5rem; border-radius: 16px;">
+            <div class="card-label" style="font-weight: 600; font-size: 0.9rem; color: var(--primary);">Kiểm Định Giả Thuyết Đã Đăng Ký (Pre-registered Hypotheses)</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 0.8rem; line-height: 1.6;">
+                <div style="border-right: 1px solid var(--border); padding-right: 1.5rem;">
+                    <strong style="color: #a78bfa; font-size: 0.95rem;">H1: mean(Second-Pass) > mean(Baseline) [Một Phía]</strong><br>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Mục tiêu: Đạt cải tiến hiệu năng sau khi tích lũy kỹ năng (S > B).</span><br>
+                    <div id="h1-stats" style="margin-top: 0.4rem; font-size: 0.9rem;">Đang tính...</div>
+                </div>
+                <div>
+                    <strong style="color: #34d399; font-size: 0.95rem;">H2: mean(Stability Gain) > 0 trên Training Tasks [Một Phía]</strong><br>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Mục tiêu: Đảm bảo độ ổn định của kỹ năng đã học (S - F > 0).</span><br>
+                    <div id="h2-stats" style="margin-top: 0.4rem; font-size: 0.9rem;">Đang tính...</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Charts & Tasks -->
         <div class="main-grid">
             <div class="chart-panel">
@@ -874,6 +916,40 @@ class ObservabilityManager:
         }} else {{
             pValText.innerText = "N/A";
             pDescText.innerText = "Chưa có đủ dữ liệu seed để tính";
+        }}
+
+        // Populate hypotheses stats
+        const h1Stats = document.getElementById('h1-stats');
+        const h2Stats = document.getElementById('h2-stats');
+        
+        if (summary.p_value_one_sided_greater !== null && summary.p_value_one_sided_greater !== undefined) {{
+            const h1_p = summary.p_value_one_sided_greater;
+            const h1_two = summary.p_value;
+            const h1_less = summary.p_value_one_sided_less;
+            const status_text = h1_p < 0.05 ? "Thành công (p < 0.05)" : "Chưa đạt ý nghĩa thống kê (p >= 0.05)";
+            const color = h1_p < 0.05 ? "var(--success)" : "var(--warning)";
+            h1Stats.innerHTML = `<span style="color: ${{color}}; font-weight: bold;">${{status_text}}</span><br>` +
+                                `<span style="font-size: 0.85rem; color: var(--text-muted);">` +
+                                `One-sided p(S > B): ${{h1_p.toFixed(4)}}<br>` +
+                                `Two-sided p: ${{h1_two.toFixed(4)}} | One-sided p(S < B): ${{h1_less.toFixed(4)}}` +
+                                `</span>`;
+        }} else {{
+            h1Stats.innerText = "Chưa đủ dữ liệu";
+        }}
+        
+        if (summary.p_value_h2_one_sided_greater !== null && summary.p_value_h2_one_sided_greater !== undefined) {{
+            const h2_p = summary.p_value_h2_one_sided_greater;
+            const h2_two = summary.p_value_h2_two_sided;
+            const h2_less = summary.p_value_h2_one_sided_less;
+            const status_text = h2_p < 0.05 ? "Thành công (p < 0.05)" : "Chưa đạt ý nghĩa thống kê (p >= 0.05)";
+            const color = h2_p < 0.05 ? "var(--success)" : "var(--warning)";
+            h2Stats.innerHTML = `<span style="color: ${{color}}; font-weight: bold;">${{status_text}}</span><br>` +
+                                `<span style="font-size: 0.85rem; color: var(--text-muted);">` +
+                                `One-sided p(SG > 0): ${{h2_p.toFixed(4)}}<br>` +
+                                `Two-sided p: ${{h2_two.toFixed(4)}} | One-sided p(SG < 0): ${{h2_less.toFixed(4)}}` +
+                                `</span>`;
+        }} else {{
+            h2Stats.innerText = "Chưa đủ dữ liệu";
         }}
         
         // Color cards based on value
