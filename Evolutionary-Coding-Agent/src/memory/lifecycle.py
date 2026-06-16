@@ -60,12 +60,34 @@ class MemoryLifecycleManager:
         old_id = duplicate["id"]
         old_content = duplicate["content"]
         
-        system_instruction = (
-            "Bạn là trợ lý quản lý bộ nhớ. Nhiệm vụ của bạn là gộp hai thông tin tương đồng "
-            "(một cũ, một mới) thành một thông tin duy nhất đầy đủ, súc tích và cập nhật nhất. Trả về dạng JSON."
-        )
-        
-        prompt = f"""
+        if namespace == "skill":
+            system_instruction = (
+                "You are a software architect memory manager. Your task is to merge two similar Python utility functions "
+                "(old and new versions) into a single, clean, valid Python code block. Return the result in JSON."
+            )
+            prompt = f"""
+Old Python utility function code:
+```python
+{old_content}
+```
+
+New Python utility function code:
+```python
+{new_content}
+```
+
+Please merge these two Python functions into a single code block. Ensure:
+1. The output is valid, clean, and executable Python code containing the necessary functions.
+2. Do not include explanations, markdown formatting, or comments outside the code.
+3. Do not write in Vietnamese description. The output must be Python code.
+4. Re-evaluate the importance (1-10 scale) based on both (old importance: {duplicate['importance']}, new importance: {new_importance}).
+"""
+        else:
+            system_instruction = (
+                "Bạn là trợ lý quản lý bộ nhớ. Nhiệm vụ của bạn là gộp hai thông tin tương đồng "
+                "(một cũ, một mới) thành một thông tin duy nhất đầy đủ, súc tích và cập nhật nhất. Trả về dạng JSON."
+            )
+            prompt = f"""
 Thông tin cũ trong bộ nhớ:
 "{old_content}"
 
