@@ -4,8 +4,8 @@ project:
   version: "1.2.0"
 
 llm:
-  model: "gemini-2.5-flash"
-  embedding_model: "gemini-embedding-001"
+  model: "deepseek-chat"
+  embedding_model: "local-hashing"
   temperature: 0.1
   # max_output_tokens is ignored by design in code to prevent early truncation in gemini-2.5-flash
 
@@ -19,14 +19,14 @@ sandbox:
 
 memory:
   sqlite_db_path: "data/memory/memory.db"
-  dedup_threshold: 0.85
+  dedup_threshold: 0.90
   max_capacity: 500
   decay_rate: 0.01  # decay per hour
   use_reranker: true
   weights:
-    relevance: 0.5
+    relevance: 0.4
     importance: 0.3
-    recency: 0.2
+    recency: 0.3
 
 observability:
   log_dir: "logs"

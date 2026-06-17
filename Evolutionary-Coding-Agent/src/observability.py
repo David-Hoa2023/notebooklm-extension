@@ -146,31 +146,62 @@ class ObservabilityManager:
             mean_scores[(task_id, pass_type)] = np.mean(scores)
             std_scores[(task_id, pass_type)] = np.std(scores) if len(scores) > 1 else 0.0
             
-        # Calculate paired t-test between baseline and second_pass
-        baseline_paired = []
-        second_pass_paired = []
-        baseline_map = {}
-        second_pass_map = {}
+        # Calculate paired t-test for All Tasks H1 (incorporating robustness runs for NEG_001 as its second pass)
+        baseline_paired_all = []
+        second_pass_paired_all = []
+        
+        baseline_map_all = {}
+        second_pass_map_all = {}
         
         for r in runs:
             if r["pass_type"] == "baseline":
-                baseline_map[(r["task_id"], r["seed"])] = r["score"]
-            elif r["pass_type"] == "second_pass":
-                second_pass_map[(r["task_id"], r["seed"])] = r["score"]
+                baseline_map_all[(r["task_id"], r["seed"])] = r["score"]
+            elif r["pass_type"] in ("second_pass", "robustness"):
+                second_pass_map_all[(r["task_id"], r["seed"])] = r["score"]
                 
-        common_keys = sorted(list(set(baseline_map.keys()).intersection(second_pass_map.keys())))
-        for k in common_keys:
-            baseline_paired.append(baseline_map[k])
-            second_pass_paired.append(second_pass_map[k])
+        common_keys_all = sorted(list(set(baseline_map_all.keys()).intersection(second_pass_map_all.keys())))
+        for k in common_keys_all:
+            baseline_paired_all.append(baseline_map_all[k])
+            second_pass_paired_all.append(second_pass_map_all[k])
             
-        t_stat, p_value = None, None
-        p_val_greater, p_val_less = None, None
-        mean_b, mean_s, mean_delta = 0.0, 0.0, 0.0
-        if len(common_keys) > 1:
-            t_stat, p_value, p_val_greater, p_val_less = self.paired_t_test(baseline_paired, second_pass_paired)
-            mean_b = float(np.mean(baseline_paired))
-            mean_s = float(np.mean(second_pass_paired))
-            mean_delta = mean_s - mean_b
+        t_stat_all, p_value_all = None, None
+        p_val_greater_all, p_val_less_all = None, None
+        mean_b_all, mean_s_all, mean_delta_all = 0.0, 0.0, 0.0
+        if len(common_keys_all) > 1:
+            t_stat_all, p_value_all, p_val_greater_all, p_val_less_all = self.paired_t_test(baseline_paired_all, second_pass_paired_all)
+            mean_b_all = float(np.mean(baseline_paired_all))
+            mean_s_all = float(np.mean(second_pass_paired_all))
+            mean_delta_all = mean_s_all - mean_b_all
+
+        # Calculate paired t-test for Training Tasks Only H1 (excluding NEG_001, NAIVE_*, HELDOUT_*)
+        baseline_paired_train = []
+        second_pass_paired_train = []
+        
+        baseline_map_train = {}
+        second_pass_map_train = {}
+        
+        for r in runs:
+            tid = r["task_id"]
+            if tid.startswith("NEG_") or tid.startswith("NAIVE_") or tid.startswith("HELDOUT_"):
+                continue
+            if r["pass_type"] == "baseline":
+                baseline_map_train[(r["task_id"], r["seed"])] = r["score"]
+            elif r["pass_type"] == "second_pass":
+                second_pass_map_train[(r["task_id"], r["seed"])] = r["score"]
+                
+        common_keys_train = sorted(list(set(baseline_map_train.keys()).intersection(second_pass_map_train.keys())))
+        for k in common_keys_train:
+            baseline_paired_train.append(baseline_map_train[k])
+            second_pass_paired_train.append(second_pass_map_train[k])
+            
+        t_stat_train, p_value_train = None, None
+        p_val_greater_train, p_val_less_train = None, None
+        mean_b_train, mean_s_train, mean_delta_train = 0.0, 0.0, 0.0
+        if len(common_keys_train) > 1:
+            t_stat_train, p_value_train, p_val_greater_train, p_val_less_train = self.paired_t_test(baseline_paired_train, second_pass_paired_train)
+            mean_b_train = float(np.mean(baseline_paired_train))
+            mean_s_train = float(np.mean(second_pass_paired_train))
+            mean_delta_train = mean_s_train - mean_b_train
 
         # Calculate paired t-test for H2 (Stability Gain on training tasks: first_pass vs second_pass)
         first_pass_paired_h2 = []
@@ -355,16 +386,29 @@ class ObservabilityManager:
                 "total_execution_time_seconds": total_duration,
                 "total_runs": len(runs) + len(explore_tasks_run),
                 "sandbox_fallback_detected": sandbox_fallback_detected,
-                "p_value": p_value,
-                "p_value_one_sided_greater": p_val_greater,
-                "p_value_one_sided_less": p_val_less,
+                
+                # All Tasks (including robustness) H1
+                "p_value": p_value_all,
+                "p_value_one_sided_greater": p_val_greater_all,
+                "p_value_one_sided_less": p_val_less_all,
+                "mean_baseline": mean_b_all,
+                "mean_second_pass": mean_s_all,
+                "mean_delta": mean_delta_all,
+                "t_stat": t_stat_all,
+                
+                # Training Tasks Only H1
+                "p_value_train": p_value_train,
+                "p_value_train_one_sided_greater": p_val_greater_train,
+                "p_value_train_one_sided_less": p_val_less_train,
+                "mean_baseline_train": mean_b_train,
+                "mean_second_pass_train": mean_s_train,
+                "mean_delta_train": mean_delta_train,
+                "t_stat_train": t_stat_train,
+                
+                # H2 (Stability Gain)
                 "p_value_h2_two_sided": p_value_h2,
                 "p_value_h2_one_sided_greater": p_val_greater_h2,
                 "p_value_h2_one_sided_less": p_val_less_h2,
-                "mean_baseline": mean_b,
-                "mean_second_pass": mean_s,
-                "mean_delta": mean_delta,
-                "t_stat": t_stat
             },
             "exploration": {
                 "coverage_rate": coverage_rate,
@@ -742,9 +786,14 @@ class ObservabilityManager:
             <div class="card-label" style="font-weight: 600; font-size: 0.9rem; color: var(--primary);">Kiểm Định Giả Thuyết Đã Đăng Ký (Pre-registered Hypotheses)</div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 0.8rem; line-height: 1.6;">
                 <div style="border-right: 1px solid var(--border); padding-right: 1.5rem;">
-                    <strong style="color: #a78bfa; font-size: 0.95rem;">H1: mean(Second-Pass) > mean(Baseline) [Một Phía]</strong><br>
-                    <span style="font-size: 0.85rem; color: var(--text-muted);">Mục tiêu: Đạt cải tiến hiệu năng sau khi tích lũy kỹ năng (S > B).</span><br>
+                    <strong style="color: #a78bfa; font-size: 0.95rem;">H1 (Training): mean(Second-Pass) > mean(Baseline) [Một Phía]</strong><br>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Mục tiêu: Đạt cải tiến hiệu năng sau khi tích lũy kỹ năng (S > B). Chỉ tính các task huấn luyện.</span><br>
                     <div id="h1-stats" style="margin-top: 0.4rem; font-size: 0.9rem;">Đang tính...</div>
+                </div>
+                <div style="border-right: 1px solid var(--border); padding-right: 1.5rem;">
+                    <strong style="color: #60a5fa; font-size: 0.95rem;">H1 (All Tasks): mean(Second-Pass) > mean(Baseline) [Một Phía]</strong><br>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Bao gồm tất cả các bài tập kể cả bài tập kiểm tra tính bền vững (Negative Transfer).</span><br>
+                    <div id="h1-all-stats" style="margin-top: 0.4rem; font-size: 0.9rem;">Đang tính...</div>
                 </div>
                 <div>
                     <strong style="color: #34d399; font-size: 0.95rem;">H2: mean(Stability Gain) > 0 trên Training Tasks [Một Phía]</strong><br>
@@ -920,12 +969,13 @@ class ObservabilityManager:
 
         // Populate hypotheses stats
         const h1Stats = document.getElementById('h1-stats');
+        const h1AllStats = document.getElementById('h1-all-stats');
         const h2Stats = document.getElementById('h2-stats');
         
-        if (summary.p_value_one_sided_greater !== null && summary.p_value_one_sided_greater !== undefined) {{
-            const h1_p = summary.p_value_one_sided_greater;
-            const h1_two = summary.p_value;
-            const h1_less = summary.p_value_one_sided_less;
+        if (summary.p_value_train_one_sided_greater !== null && summary.p_value_train_one_sided_greater !== undefined) {{
+            const h1_p = summary.p_value_train_one_sided_greater;
+            const h1_two = summary.p_value_train;
+            const h1_less = summary.p_value_train_one_sided_less;
             const status_text = h1_p < 0.05 ? "Thành công (p < 0.05)" : "Chưa đạt ý nghĩa thống kê (p >= 0.05)";
             const color = h1_p < 0.05 ? "var(--success)" : "var(--warning)";
             h1Stats.innerHTML = `<span style="color: ${{color}}; font-weight: bold;">${{status_text}}</span><br>` +
@@ -935,6 +985,21 @@ class ObservabilityManager:
                                 `</span>`;
         }} else {{
             h1Stats.innerText = "Chưa đủ dữ liệu";
+        }}
+
+        if (summary.p_value_one_sided_greater !== null && summary.p_value_one_sided_greater !== undefined) {{
+            const h1_p = summary.p_value_one_sided_greater;
+            const h1_two = summary.p_value;
+            const h1_less = summary.p_value_one_sided_less;
+            const status_text = h1_p < 0.05 ? "Thành công (p < 0.05)" : "Chưa đạt ý nghĩa thống kê (p >= 0.05)";
+            const color = h1_p < 0.05 ? "var(--success)" : "var(--warning)";
+            h1AllStats.innerHTML = `<span style="color: ${{color}}; font-weight: bold;">${{status_text}}</span><br>` +
+                                   `<span style="font-size: 0.85rem; color: var(--text-muted);">` +
+                                   `One-sided p(S > B): ${{h1_p.toFixed(4)}}<br>` +
+                                   `Two-sided p: ${{h1_two.toFixed(4)}} | One-sided p(S < B): ${{h1_less.toFixed(4)}}` +
+                                   `</span>`;
+        }} else {{
+            h1AllStats.innerText = "Chưa đủ dữ liệu";
         }}
         
         if (summary.p_value_h2_one_sided_greater !== null && summary.p_value_h2_one_sided_greater !== undefined) {{

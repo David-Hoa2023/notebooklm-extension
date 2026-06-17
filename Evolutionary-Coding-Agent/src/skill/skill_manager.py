@@ -19,17 +19,100 @@ SKILL_LIST_SCHEMA = {
                     "name": {"type": "STRING"},
                     "code": {"type": "STRING"},
                     "docstring": {"type": "STRING"},
+                    "domain": {"type": "STRING"},
                     "dependencies": {
                         "type": "ARRAY",
                         "items": {"type": "STRING"}
                     }
                 },
-                "required": ["name", "code", "docstring", "dependencies"]
+                "required": ["name", "code", "docstring", "dependencies", "domain"]
             }
         }
     },
     "required": ["skills"]
 }
+
+KNOWN_IMPORTS = {
+    "List": "from typing import List",
+    "Dict": "from typing import Dict",
+    "Tuple": "from typing import Tuple",
+    "Set": "from typing import Set",
+    "Optional": "from typing import Optional",
+    "Union": "from typing import Union",
+    "Any": "from typing import Any",
+    "Callable": "from typing import Callable",
+    "Iterable": "from typing import Iterable",
+    "Sequence": "from typing import Sequence",
+    "Mapping": "from typing import Mapping",
+    "re": "import re",
+    "json": "import json",
+    "math": "import math",
+    "datetime": "import datetime",
+    "time": "import time",
+    "sys": "import sys",
+    "os": "import os",
+    "collections": "import collections",
+    "defaultdict": "from collections import defaultdict",
+    "deque": "from collections import deque",
+    "Counter": "from collections import Counter",
+}
+
+def auto_prepend_imports(code: str) -> str:
+    try:
+        tree = ast.parse(code)
+    except Exception:
+        return code
+
+    existing_imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                existing_imports.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                for alias in node.names:
+                    existing_imports.add(alias.name)
+                    existing_imports.add(f"{node.module}.{alias.name}")
+
+    used_names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            used_names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name):
+                used_names.add(node.value.id)
+                used_names.add(f"{node.value.id}.{node.attr}")
+        elif isinstance(node, ast.arg) and node.annotation:
+            for subnode in ast.walk(node.annotation):
+                if isinstance(subnode, ast.Name):
+                    used_names.add(subnode.id)
+        elif isinstance(node, ast.FunctionDef) and node.returns:
+            for subnode in ast.walk(node.returns):
+                if isinstance(subnode, ast.Name):
+                    used_names.add(subnode.id)
+
+    imports_to_add = []
+    typing_names = []
+    other_imports = []
+    for name in sorted(used_names):
+        if name in KNOWN_IMPORTS:
+            if name in existing_imports or f"typing.{name}" in existing_imports or f"collections.{name}" in existing_imports:
+                continue
+            imp_stmt = KNOWN_IMPORTS[name]
+            if "typing" in imp_stmt:
+                typing_names.append(name)
+            else:
+                other_imports.append(imp_stmt)
+
+    if typing_names:
+        imports_to_add.append(f"from typing import {', '.join(sorted(list(set(typing_names))))}")
+    for imp in sorted(list(set(other_imports))):
+        imports_to_add.append(imp)
+
+    if imports_to_add:
+        code = "\n".join(imports_to_add) + "\n\n" + code
+    return code
+
 
 class SkillManager:
     def __init__(self):
@@ -61,6 +144,8 @@ Mỗi hàm helper trích xuất cần phải:
 2. Có kiểu dữ liệu đầu vào, đầu ra rõ ràng (Type Hints).
 3. Có docstring mô tả chi tiết chức năng, tham số và giá trị trả về bằng tiếng Anh/Việt.
 4. KHÔNG bao gồm code test hoặc code chạy thử ở mức toàn cục.
+5. Xác định domain (lĩnh vực) phù hợp cho hàm này (chọn một trong: regex, smtp, json, math, datetime, string_parsing, file_io, algorithms, data_structures, error_handling, testing, hoặc generic).
+   Chú ý: Khi định nghĩa kiểu dữ liệu (Type Hints), hãy sử dụng kiểu chữ thường (ví dụ: list, dict) hoặc import đầy đủ từ thư viện `typing` (ví dụ: List, Dict, Optional) nếu cần thiết.
 """
         extracted_ids = []
         try:
@@ -78,12 +163,33 @@ Mỗi hàm helper trích xuất cần phải:
                 name = sk.get("name")
                 code_content = sk.get("code")
                 docstring = sk.get("docstring", "")
+                domain = sk.get("domain", "generic").lower().strip()
                 deps = sk.get("dependencies", [])
                 
                 if not name or not code_content:
                     continue
+                
+                # 1. Clean code content formatting: unescape \n
+                code_content = code_content.replace('\\n', '\n')
+                
+                # 2. Verify initial AST syntax validity
+                try:
+                    ast.parse(code_content)
+                except Exception as parse_err:
+                    print(f"Skipping skill candidate '{name}' due to AST parsing error: {parse_err}")
+                    continue
+                
+                # 3. Auto-prepend required standard library & typing imports
+                code_content = auto_prepend_imports(code_content)
+                
+                # 4. Verify AST validity again after prepending
+                try:
+                    ast.parse(code_content)
+                except Exception as parse_err:
+                    print(f"Skipping skill candidate '{name}' after auto-prepend imports: {parse_err}")
+                    continue
                     
-                print(f"Extracted Skill candidate: '{name}' from task '{task_id}'. Running verification...")
+                print(f"Extracted Skill candidate: '{name}' (domain: '{domain}') from task '{task_id}'. Running verification...")
                 
                 # Step 2: Test & Verify Skill (SKILL_002)
                 # We call skill_tester to auto-generate tests and verify inside sandbox
@@ -106,10 +212,11 @@ Mỗi hàm helper trích xuất cần phải:
                     
                 combined_deps = list(set(deps + ast_deps))
                 
-                # Register in database with version and source task provenance
+                # Register in database with version, domain tag, and source task provenance
                 metadata = {
                     "name": name,
                     "docstring": docstring,
+                    "domain": domain,
                     "dependencies": combined_deps,
                     "retrievable": is_verified, # Only retrieve if verified
                     "generated_tests": generated_tests,

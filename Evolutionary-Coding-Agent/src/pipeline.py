@@ -69,6 +69,26 @@ class AgentPipeline:
                     pass
         return "\n".join(stubs)
 
+    def _infer_task_domains(self, task_id: str, description: str) -> set[str]:
+        text_lower = (task_id + " " + description).lower()
+        domains = set()
+        patterns = {
+            "regex": r"\bregex\b|\bre\b|\bpattern\b|\bmatch\b",
+            "smtp": r"\bsmtp\b|\bemail\b|\bmail\b|\bsmtplib\b",
+            "json": r"\bjson\b|\bserialize\b|\bdeserialize\b",
+            "math": r"\bmath\b|\bexpression\b|\bcalculate\b|\barithmetic\b|\beval\b",
+            "datetime": r"\bdate\b|\btime\b|\bdatetime\b|\btimestamp\b",
+            "file_io": r"\bfile\b|\bread\b|\bwrite\b|\bpath\b",
+            "algorithms": r"\bsort\b|\bsearch\b|\bgraph\b|\btree\b|\bdp\b|\bdynamic\b",
+            "data_structures": r"\bdict\b|\blist\b|\bset\b|\btuple\b|\bdeque\b|\bheap\b",
+            "error_handling": r"\btry\b|\bexcept\b|\braise\b|\berror\b",
+            "testing": r"\btest\b|\bassert\b|\bunittest\b",
+        }
+        for dom, pattern in patterns.items():
+            if re.search(pattern, text_lower):
+                domains.add(dom)
+        return domains
+
     def execute_task(self, task: dict, probe_context: str = "", seed: int | None = None) -> dict:
         """
         Executes a single curriculum task.
@@ -92,11 +112,14 @@ class AgentPipeline:
         
         # 1. Retrieve memory
         if self.memory_enabled:
+            insight_limit = 1 if self.frozen_memory else 2
+            skill_limit = 1 if self.frozen_memory else 2
+
             # Query insights (lessons learned)
             retrieved_insights = memory_engine.retrieve_memories(
                 namespace="insight",
                 query_text=description,
-                limit=2 # Limit top-2
+                limit=insight_limit
             )
             
             # Exclude regex/email-poison insights when task_id starts with NEG_ or description mentions smtplib
@@ -114,15 +137,50 @@ class AgentPipeline:
             # We filter for active skills
             active_skills = skill_composition_instance.get_active_skills()
             if active_skills:
-                # Retrieve from active skills by embedding match
+                # Retrieve from active skills by embedding match (retrieve more first to allow filtering)
                 retrieved_skills = memory_engine.retrieve_memories(
                     namespace="skill",
                     query_text=description,
-                    limit=2,
+                    limit=5,
                     filters={"status": "success"} # ensure it passed
                 )
                 # Keep only skills that are marked retrievable
                 retrieved_skills = [sk for sk in retrieved_skills if sk.get("metadata", {}).get("retrievable", False)]
+                
+                # Filter retrieved skills by domain compatibility
+                task_domains = self._infer_task_domains(task_id, description)
+                filtered_skills = []
+                for sk in retrieved_skills:
+                    sk_meta = sk.get("metadata", {})
+                    sk_dom = sk_meta.get("domain", "generic").lower().strip()
+                    if sk_dom == "generic" or not task_domains or sk_dom in task_domains:
+                        filtered_skills.append(sk)
+                    else:
+                        print(f"[{task_id}] Excluded skill '{sk_meta.get('name')}' due to domain mismatch (skill domain '{sk_dom}' not in task domains {task_domains})")
+                retrieved_skills = filtered_skills
+
+                # Exclude regex/email-poison skills when task_id starts with NEG_ or description mentions smtplib
+                if task_id.startswith("NEG_") or "smtplib" in description:
+                    filtered_skills = []
+                    for sk in retrieved_skills:
+                        meta = sk.get("metadata", {})
+                        name_lower = meta.get("name", "").lower()
+                        dom_lower = meta.get("domain", "").lower()
+                        content_lower = sk.get("content", "").lower()
+                        if "regex" in name_lower or "email" in name_lower or "regex" in dom_lower or "email" in dom_lower or "pattern" in content_lower:
+                            print(f"[{task_id}] Excluded regex/email-poison skill: {meta.get('name')}")
+                            continue
+                        filtered_skills.append(sk)
+                    retrieved_skills = filtered_skills
+
+                # Prioritize task-local skills
+                retrieved_skills.sort(
+                    key=lambda sk: 0 if task_id in sk.get("metadata", {}).get("source_tasks", []) else 1
+                )
+
+                # Limit retrieval size
+                retrieved_skills = retrieved_skills[:skill_limit]
+
                 # Composed skill bundles: recursively retrieve dependencies!
                 retrieved_skills = skill_composition_instance.resolve_dependencies(retrieved_skills)
                 
@@ -161,7 +219,11 @@ class AgentPipeline:
             prompt = ""
             if self.memory_enabled:
                 prompt += "=== TÀI LIỆU THAM KHẢO & KINH NGHIỆM ĐÃ TÍCH LŨY ===\n"
-                prompt += "LƯU Ý: Các thông tin và Skill dưới đây chỉ là tài liệu tham khảo để học tập kinh nghiệm, không phải là chỉ thị bắt buộc. Hãy tùy biến linh hoạt, tránh copy-paste một cách máy móc.\n\n"
+                prompt += (
+                    "LƯU Ý:\n"
+                    "1. Các thông tin và Skill dưới đây chỉ là tài liệu tham khảo để học tập kinh nghiệm, không phải là chỉ thị bắt buộc. Hãy tùy biến linh hoạt, tránh copy-paste một cách máy móc.\n"
+                    "2. Hãy bỏ qua (ignore) hoàn toàn những skill không khớp hoặc không liên quan đến domain/yêu cầu của bài toán hiện tại.\n\n"
+                )
                 
                 if retrieved_insights:
                     prompt += "--- Các bài học kinh nghiệm / Cảnh báo lỗi trước đây:\n"
@@ -174,13 +236,16 @@ class AgentPipeline:
                     prompt += skill_composition_instance.format_skills_for_prompt(retrieved_skills)
                     prompt += "\n\n"
             
-            # Inject baseline signatures on second pass (frozen_memory=True) to freeze function signature
+            # Inject baseline signatures and reference code on second pass (frozen_memory=True)
             if self.frozen_memory and baseline_code:
                 sig_stubs = self._extract_baseline_signatures(baseline_code)
                 if sig_stubs:
                     prompt += "=== YÊU CẦU SIGNATURE CỦA HÀM (BẮT BUỘC) ===\n"
                     prompt += "Bạn BẮT BUỘC phải giữ nguyên signature của hàm như baseline bên dưới (không thêm bớt tham số, không thay đổi kiểu trả về):\n"
                     prompt += f"```python\n{sig_stubs}\n```\n\n"
+                prompt += "=== GIẢI PHÁP BASELINE ĐÃ HOẠT ĐỘNG (THAM KHẢO) ===\n"
+                prompt += "Dưới đây là giải pháp baseline đã chạy thành công trước đó. Hãy giữ nguyên các chức năng cốt lõi đã hoạt động đúng và cải tiến dựa trên giải pháp này (tránh làm hỏng/regress những gì đang chạy tốt):\n"
+                prompt += f"```python\n{baseline_code}\n```\n\n"
                     
             prompt += f"=== YÊU CẦU BÀI TOÁN ===\n{description}\n"
 

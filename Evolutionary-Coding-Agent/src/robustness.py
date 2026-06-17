@@ -221,7 +221,7 @@ class RobustnessSuite:
             observability_manager.log_run(
                 task_id=NEGATIVE_TRANSFER_TASK["id"],
                 seed=seed,
-                pass_type="second_pass", # Match second_pass to compare against baseline in paired tests
+                pass_type="robustness",
                 status=res_mem["status"],
                 score=res_mem["score"],
                 duration=duration_mem,

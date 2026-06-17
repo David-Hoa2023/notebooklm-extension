@@ -1,94 +1,113 @@
 import os
 import json
-from google import genai
-from google.genai import types
+import hashlib
+import requests
+import numpy as np
+import random
 from src.config import config_instance
 
 class GeminiClient:
     def __init__(self):
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("Environment variable GEMINI_API_KEY is not set.")
-        # Initialize client with API key
-        self.client = genai.Client(api_key=api_key)
-        self.default_model = config_instance.get("llm.model", "gemini-2.5-flash")
-        self.embedding_model = config_instance.get("llm.embedding_model", "gemini-embedding-001")
+        # Read DeepSeek key from env variable or fallback to provided key
+        self.api_key = os.environ.get("DEEPSEEK_API_KEY") or "sk-64a423c9e0d6452e978f78dbed99f6f4"
+        self.base_url = "https://api.deepseek.com/v1"
+        self.default_model = config_instance.get("llm.model", "deepseek-chat")
 
     def generate(self, prompt: str, system_instruction: str = None, temperature: float = None, json_mode: bool = False, response_schema = None) -> str:
         """
-        Generate content using Gemini API.
+        Generate content using DeepSeek API (OpenAI-compatible).
         """
-        import random
-        import numpy as np
         seed = config_instance.get("project.seed", 42)
         random.seed(seed)
         np.random.seed(seed)
         
         temp = temperature if temperature is not None else config_instance.get("llm.temperature", 0.1)
         
-        config_args = {
-            "temperature": temp,
-            "seed": seed,
+        # Build messages
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+            
+        # Format response_schema if provided to ensure DeepSeek follows it perfectly in JSON Mode
+        if json_mode and response_schema:
+            if hasattr(response_schema, "model_json_schema"):
+                schema_dict = response_schema.model_json_schema()
+            elif hasattr(response_schema, "schema"):
+                schema_dict = response_schema.schema()
+            else:
+                schema_dict = response_schema
+                
+            schema_instruction = (
+                f"\n\nCRITICAL: Your response MUST be a JSON object matching this JSON Schema:\n"
+                f"{json.dumps(schema_dict, ensure_ascii=False)}\n"
+                f"Ensure all required fields are present and correct."
+            )
+            if messages:
+                messages[0]["content"] += schema_instruction
+            else:
+                messages.append({"role": "system", "content": schema_instruction})
+                
+        messages.append({"role": "user", "content": prompt})
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
         }
         
-        # Do not set max_output_tokens as it causes early truncation in gemini-2.5-flash
-        pass
-            
-        if system_instruction:
-            config_args["system_instruction"] = system_instruction
-            
-        if json_mode:
-            config_args["response_mime_type"] = "application/json"
-            if response_schema:
-                config_args["response_schema"] = response_schema
-                
-        config = types.GenerateContentConfig(**config_args)
+        payload = {
+            "model": self.default_model,
+            "messages": messages,
+            "temperature": temp,
+            "seed": seed
+        }
         
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+            
         try:
-            response = self.client.models.generate_content(
-                model=self.default_model,
-                contents=prompt,
-                config=config
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=60
             )
-            return response.text
+            response.raise_for_status()
+            res_json = response.json()
+            return res_json["choices"][0]["message"]["content"]
         except Exception as e:
-            # Fallback or log error
             print(f"Error in LLM Generation: {e}")
+            if 'response' in locals() and hasattr(response, 'text'):
+                print(f"Response details: {response.text}")
             raise e
 
     def embed(self, text: str) -> list[float]:
         """
-        Generate vector embedding for a text.
+        Generate vector embedding for a text locally using feature hashing (768 dimensions).
         """
-        if not text.strip():
-            # Return zero vector if text is empty
-            return [0.0] * 768 # text-embedding-004 defaults to 768 dimensions
-        try:
-            response = self.client.models.embed_content(
-                model=self.embedding_model,
-                contents=text
-            )
-            # Embedding structure in google-genai: response.embeddings[0].values
-            return response.embeddings[0].values
-        except Exception as e:
-            print(f"Error in LLM Embedding: {e}")
-            raise e
+        dimensions = 768
+        if not text or not text.strip():
+            return [0.0] * dimensions
+            
+        words = text.lower().split()
+        vector = [0.0] * dimensions
+        for word in words:
+            h = hashlib.md5(word.encode('utf-8')).hexdigest()
+            idx = int(h[:8], 16) % dimensions
+            val = 1.0 if int(h[8:16], 16) % 2 == 0 else -1.0
+            vector[idx] += val
+            
+        vec_np = np.array(vector, dtype=np.float32)
+        norm = np.linalg.norm(vec_np)
+        if norm > 0:
+            vec_np /= norm
+            
+        return vec_np.tolist()
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """
-        Generate vector embeddings for a list of texts.
+        Generate vector embeddings for a list of texts locally.
         """
-        if not texts:
-            return []
-        try:
-            response = self.client.models.embed_content(
-                model=self.embedding_model,
-                contents=texts
-            )
-            return [emb.values for emb in response.embeddings]
-        except Exception as e:
-            print(f"Error in LLM Batch Embedding: {e}")
-            raise e
+        return [self.embed(t) for t in texts]
 
 # Create a singleton client instance
 llm_client = GeminiClient()

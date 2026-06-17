@@ -4,27 +4,54 @@ Last updated: 2026-06-16 (afternoon). Living record of audits, Phase 5 hardening
 
 ---
 
+## Current project state (snapshot)
+
+| Item | Status |
+|------|--------|
+| Skill-backed coverage | **100%** (10/10 capabilities, zero gaps) |
+| Skills in DB | 35 total, **24 retrievable**, **35/35 AST-valid** |
+| Unit tests | **26/26 passed** |
+| Exploration policy | `epsilon: 0.35`, `min_epsilon: 0.1` (production defaults restored) |
+| LLM model | `gemini-2.5-flash` (pro quota exhausted) |
+| DB backup | `data/memory_snapshots/memory_repaired_backup.db` |
+| Latest commit | `8df0a79` — skill repair, epsilon restore, memory log |
+| Working tree | Clean (tracked files) |
+
+**Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
+
+**Known caveat:** H2 dashboard label says "training tasks" but `observability.py` pairs all `first_pass` vs `second_pass` runs (includes `NEG_001`). Filter or relabel if strict training-only H2 is required.
+
+---
+
 ## Session log (June 16, 2026 — afternoon)
 
 ### What was accomplished
 
-1. **Repaired Corrupted Skill**: Fixed the `validate_list_lengths_match` skill in the database by replacing the Vietnamese prose description with its correct Python functional code. The repair was fully verified in Docker using `skill_tester_instance` and updated back into `data/memory/memory.db` as retrievable (`retrievable: True`).
-2. **Dedup Bug Resolution & Prevention**: Documented the root cause of the skill corruption (an insight-style merge of skills that mistakenly replaced Python code with prose during consolidation/deduplication) and the namespace-aware merge prompt fix that prevents recurrence.
-3. **E2E 100% Coverage Verification**: Confirmed that all 10 out of 10 capabilities in the taxonomy are backed by active, verified skills (100% coverage).
-4. **Epsilon Restoration**: Reverted `exploration.epsilon` to `0.35` and `min_epsilon` to `0.1` in `config.yaml` to restore default production policy behavior.
-5. **Snapshot Database Backup**: Created a database snapshot backup at `data/memory_snapshots/memory_repaired_backup.db` so the repaired DB state is easily recoverable.
+1. **Repaired last corrupted skill**: Restored `validate_list_lengths_match` in `data/memory/memory.db` (Vietnamese prose → valid Python). Verified in Docker via `skill_tester_instance`; marked `retrievable: True`. All 35 skills now AST-parseable.
+2. **Dedup bug — root cause & fix** (`26fd2fa`, `src/memory/lifecycle.py`):
+   - **Cause:** `deduplicate_and_merge` used the insight merge prompt for all namespaces. Similar Python skills were merged into Vietnamese prose, corrupting executable code and breaking sandbox runs.
+   - **Fix:** Branch on `namespace == "skill"` — LLM must output merged **Python code**, not a description.
+3. **DB repair pass** (local, not in git): Utility scripts under `scratch/` (gitignored) recovered code from metadata unit tests via AST, re-verified in Docker, and updated `memory.db`. Snapshot saved to `data/memory_snapshots/memory_repaired_backup.db`.
+4. **E2E hardening batch** (`af2034d`): Arity guard + baseline signature injection (`pipeline.py`); NEG_/smtplib insight filter; toxic insight quarantine (`memory_engine.py`); testing-only `top_gaps()`; H1/H2 paired t-tests on dashboard; trace archiving on `explore`/`run-all`/`baseline`.
+5. **100% coverage confirmed**: `skill_gap_analyzer.analyze()` → `skill_backed_coverage_rate: 1.0` after DB repair + `python run.py report`.
+6. **Epsilon restoration**: Reverted `exploration.epsilon` to `0.35` and `min_epsilon` to `0.1` in `config.yaml`.
+7. **Docs synced**: `walkthrough.md` updated to 100% coverage and 26/26 tests.
 
-### Verified E2E metrics
+### Verified metrics
 
 | Metric | Value | Detail |
-|---|---|---|
-| Oracle validation rate | **75.0%** | (Historical) Oracle filters toxic insights and arity drift |
-| Self-proposed success | **66.7%** | (Historical) Self-proposed tasks pass in Docker |
-| Skill-backed coverage | **100.0%** | 10/10 caps (verified active skills cover: algorithms, data_structures, date_time, error_handling, file_io, json_parsing, math_evaluation, regex, string_parsing, testing) |
+|--------|-------|--------|
+| Skill-backed coverage | **100.0%** | 10/10 caps — algorithms, data_structures, date_time, error_handling, file_io, json_parsing, math_evaluation, regex, string_parsing, testing |
+| Oracle validation rate | **75.0%** | (Historical, forced explore) |
+| Self-proposed success | **66.7%** | (Historical, 6/9 passed) |
+| PG / SG / GG (6 seeds) | **+0.167 / +0.104 / -0.083** | From last `run-all` (not re-run after DB repair) |
+| p-value H1 (S vs B) | **0.7201** | Not significant at α=0.05 |
 
 ### Next steps (priority)
 
-1. **Monitor pipeline runs**: Ensure future exploration runs remain robust to corruption under the namespace-aware merge prompt.
+1. **Monitor exploration runs** under namespace-aware skill merge; watch for merge regressions.
+2. **Optional:** Re-run `run-all` to refresh PG/SG/GG and p-values after DB repair.
+3. **Optional:** Narrow H2 t-test to training tasks only (`SUB_*`, `COMPLEX_001`).
 
 ---
 
@@ -177,10 +204,13 @@ Explore/Exploit policy
 
 ### Wiring
 
-- `pipeline.py` — `probe_context` param; `execution_mode` in trace metadata
-- `observability.py` — dual coverage panels, stderr logging, per-seed breakdown, paired t-test
-- `run.py` — `python run.py explore`
-- `config.yaml` — `exploration.epsilon: 0.35`, `max_tasks_per_run: 4`, `budget_tokens: 200000`
+- `pipeline.py` — `probe_context`; AST arity guard; baseline signature injection on second pass; NEG_/smtplib insight filter; `arity_drift_rejected` in trace metadata
+- `memory_engine.py` — quarantine toxic insights (`importance >= 9` + `"LUÔN LUÔN trả về"`) on `add_insight`; exclude quarantined from retrieval
+- `lifecycle.py` — namespace-aware skill dedup merge (Python code, not prose)
+- `skill_gap_analyzer.py` — skill-backed coverage requires `retrievable=True`; `top_gaps()` targets `testing` exclusively when it is a gap
+- `observability.py` — dual coverage panels, H1/H2 hypotheses on dashboard, stderr logging, paired t-tests
+- `run.py` — `explore`, `run-all`; `archive_trace_file()` on explore/run-all/baseline
+- `config.yaml` — `exploration.epsilon: 0.35`, `min_epsilon: 0.1`, `max_tasks_per_run: 4`, `budget_tokens: 200000`
 
 ### Run command
 
@@ -193,12 +223,20 @@ Requires `GEMINI_API_KEY` and Docker (`refuse_fallback: true`).
 
 To force 100% explore for verification: temporarily set `epsilon: 1.0` and `min_epsilon: 1.0`, then restore defaults.
 
+### Memory & data integrity
+
+- **Coverage rule:** Skill-backed caps require active skills with `metadata.retrievable=True` that pass sandbox verification.
+- **Dedup:** Similar skills above `dedup_threshold` (0.85) merge via LLM — skill namespace must return Python, insight namespace returns Vietnamese prose.
+- **Poison defense:** (1) conflict resolution on contradictory insights; (2) automatic quarantine on new toxic insights; (3) pipeline filter for NEG_/smtplib tasks.
+- **Recovery:** Restore DB from `data/memory_snapshots/memory_repaired_backup.db` if corruption recurs.
+
 ---
 
 ## Test status
 
-- **25/25 passed** — `test_exploration` (13), `test_lifecycle` (3), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1)
-- Run: `.venv\Scripts\python -m pytest` (~150-160s due to extensive sandbox isolation verification)
+- **26/26 passed** — `test_exploration` (14), `test_lifecycle` (4), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1)
+- Notable new tests: `test_top_gaps_logic`, `test_poison_insight_quarantined`
+- Run: `.venv\Scripts\python -m pytest` (~150–190s due to sandbox isolation checks)
 
 ---
 
@@ -225,11 +263,17 @@ To force 100% explore for verification: temporarily set `epsilon: 1.0` and `min_
 
 | Commit | Summary |
 |--------|---------|
+| `8df0a79` | Repair `validate_list_lengths_match`, restore epsilon, update memory |
+| `26fd2fa` | Fix skill dedup code-corruption bug; walkthrough 100% coverage |
+| `af2034d` | Arity guard, quarantine, H1/H2 stats, testing gap targeting, 26 tests |
+| `43ba1dd` | June 16 morning E2E audit docs |
+| `3687837` | 6-seed run-all, SMTP/SUB_002 fixes |
+| `480d275` | Forced-explore E2E verification docs |
 | `70e0cc9` | Initialize project structure (49 files) |
-| `3059112` | Walkthrough, memory, dashboard screenshot |
-| `3d2b74d` | Dashboard JS syntax fix |
 
-Tracked `Evolutionary-Coding-Agent/` path: clean working tree.
+**Not in git (by design):** `data/memory/memory.db`, `data/memory_snapshots/`, `scratch/`, `logs/`.
+
+Tracked `Evolutionary-Coding-Agent/` path: clean working tree as of `8df0a79`.
 
 ---
 
