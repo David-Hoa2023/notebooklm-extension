@@ -6,10 +6,13 @@ import numpy as np
 import random
 from src.config import config_instance
 
-class GeminiClient:
+class LLMClient:
     def __init__(self):
-        # Read DeepSeek key from env variable or fallback to provided key
-        self.api_key = os.environ.get("DEEPSEEK_API_KEY") or "sk-64a423c9e0d6452e978f78dbed99f6f4"
+        # Require DeepSeek key from env variable
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise ValueError("Environment variable DEEPSEEK_API_KEY is not set.")
+        self.api_key = api_key
         self.base_url = "https://api.deepseek.com/v1"
         self.default_model = config_instance.get("llm.model", "deepseek-chat")
 
@@ -110,4 +113,4 @@ class GeminiClient:
         return [self.embed(t) for t in texts]
 
 # Create a singleton client instance
-llm_client = GeminiClient()
+llm_client = LLMClient()

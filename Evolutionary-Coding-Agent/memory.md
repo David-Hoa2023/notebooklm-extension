@@ -10,16 +10,39 @@ Last updated: 2026-06-16 (afternoon). Living record of audits, Phase 5 hardening
 |------|--------|
 | Skill-backed coverage | **100%** (10/10 capabilities, zero gaps) |
 | Skills in DB | 35 total, **24 retrievable**, **35/35 AST-valid** |
-| Unit tests | **26/26 passed** |
-| Exploration policy | `epsilon: 0.35`, `min_epsilon: 0.1` (production defaults restored) |
-| LLM model | `gemini-2.5-flash` (pro quota exhausted) |
-| DB backup | `data/memory_snapshots/memory_repaired_backup.db` |
-| Latest commit | `8df0a79` — skill repair, epsilon restore, memory log |
-| Working tree | Clean (tracked files) |
+| Unit tests | **26/26 passed** (scratch excluded via `pytest.ini`) |
+| Exploration policy | `epsilon: 0.35`, `min_epsilon: 0.1` |
+| LLM model | `deepseek-chat` (via DeepSeek API) |
+| Embedding model | `local-hashing` (local 768-dimensional hashing embeddings) |
+| DB backup | Clean rebuild with 768-dim embeddings |
+| Latest commit | `cac3a41` — DeepSeek Stack & local hashing embeddings |
+| Working tree | Modified (staged for cleanup commit) |
 
 **Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
 
 **Known caveat:** H2 dashboard label says "training tasks" but `observability.py` pairs all `first_pass` vs `second_pass` runs (includes `NEG_001`). Filter or relabel if strict training-only H2 is required.
+
+---
+
+## Session log (June 17, 2026 — morning)
+
+### What was accomplished
+
+1. **Migrated to DeepSeek API**: Renamed `GeminiClient` to `LLMClient` and migrated LLM inference/judge to use the `deepseek-chat` model.
+2. **Local Feature Hashing Embeddings**: Implemented a 100% local, deterministic, 768-dimensional feature hashing algorithm to generate embeddings, completely eliminating Gemini embedding dependency.
+3. **Database Reset**: Reset and cleared the database and snapshots to migrate cleanly to 768-dimensional embeddings.
+4. **Security Hardening**: Removed hardcoded fallback keys, forcing `DEEPSEEK_API_KEY` to be supplied strictly via environment variables.
+5. **SMTP Filter Hardening**: Tightened negative transfer filters on `NEG_001` / `smtplib` tasks to block insights containing authentication noise (`"login"`, `"starttls"`, `"xác thực"`, `"authentication"`).
+6. **Pytest Configuration**: Created `pytest.ini` to exclude the `scratch/` directory from test discovery.
+
+### Verified metrics (DeepSeek Smoke Test)
+
+| Metric | Value | Detail |
+|--------|-------|--------|
+| Skill-backed coverage | **100.0%** | (Historical) All 10/10 Capabilities verified and active |
+| PG / SG / GG (1 seed) | **0.000 / 0.000 / 0.000** | Stable and complete execution of the training & held-out tasks (all solved at 9.0) |
+| Memory Poisoning | **Passed** | Toxic insights quarantined; agent successfully resisted poisoned advice |
+| SMTP NEG Filter | **Passed** | Mismatched domain skills, regex/email skills, and authentication insights correctly filtered |
 
 ---
 

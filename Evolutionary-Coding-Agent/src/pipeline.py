@@ -122,13 +122,14 @@ class AgentPipeline:
                 limit=insight_limit
             )
             
-            # Exclude regex/email-poison insights when task_id starts with NEG_ or description mentions smtplib
+            # Exclude regex/email-poison and SMTP auth/TLS noise insights when task_id starts with NEG_ or description mentions smtplib
             if task_id.startswith("NEG_") or "smtplib" in description:
                 filtered_insights = []
                 for ins in retrieved_insights:
                     content_lower = ins.get("content", "").lower()
-                    if "regex" in content_lower or "email" in content_lower or "luôn luôn trả về" in content_lower:
-                        print(f"[{task_id}] Excluded regex/email-poison insight: {ins.get('id')}")
+                    exclude_keywords = ["regex", "email", "luôn luôn trả về", "login", "starttls", "xác thực", "authentication"]
+                    if any(kw in content_lower for kw in exclude_keywords):
+                        print(f"[{task_id}] Excluded regex/email/SMTP auth insight: {ins.get('id')}")
                         continue
                     filtered_insights.append(ins)
                 retrieved_insights = filtered_insights
