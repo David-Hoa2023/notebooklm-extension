@@ -15,7 +15,7 @@ Last updated: 2026-06-17 (noon). Living record of audits, Phase 5 hardening, Pha
 | LLM model | `deepseek-chat` (via DeepSeek API) |
 | Embedding model | `local-hashing` (local 768-dimensional hashing embeddings) |
 | DB backup | Clean rebuild with 768-dim embeddings |
-| Latest commit | `8ae4fbc` — Update walkthrough.md and memory.md with 2-seed validation metrics |
+| Latest commit | `4a7f319` — Fix NEG_001 SMTP mock and refresh evaluation metrics over 6 seeds |
 | Working tree | **Clean** (documented and verified) |
 
 **Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
@@ -273,10 +273,10 @@ To force 100% explore for verification: temporarily set `epsilon: 1.0` and `min_
 
 ## Evolutionary loop metrics (run-all, 6 seeds)
 
-- **Plasticity Gain (PG):** +0.167 (mean)
-- **Stability Gain (SG):** +0.104 (mean)
-- **Generalization Gain (GG):** -0.083 (mean)
-- **p-value (two-sided):** 0.7201 (including NEG_001, baseline vs second-pass over 6 seeds)
+- **Plasticity Gain (PG):** 0.000 (mean)
+- **Stability Gain (SG):** 0.000 (mean)
+- **Generalization Gain (GG):** 0.000 (mean)
+- **p-value (two-sided):** 1.0000 (saturation at the 9.0 ceiling; all tasks passed baseline and robustness)
 - **p-value (training tasks only):** 1.0000 (no score change on curriculum training tasks)
 
 
@@ -286,6 +286,10 @@ To force 100% explore for verification: temporarily set `epsilon: 1.0` and `min_
 
 | Commit | Summary |
 |--------|---------|
+| `4a7f319` | Fix NEG_001 SMTP mock and refresh evaluation metrics over 6 seeds |
+| `8ae4fbc` | Update walkthrough.md and memory.md with 2-seed validation metrics |
+| `4c65c07` | Harden DeepSeek stack: remove hardcoded key, rename class to LLMClient, tighten NEG filters, and add pytest.ini |
+| `cac3a41` | Migrate from Gemini API to DeepSeek API with local hashing embeddings and stability fixes |
 | `8df0a79` | Repair `validate_list_lengths_match`, restore epsilon, update memory |
 | `26fd2fa` | Fix skill dedup code-corruption bug; walkthrough 100% coverage |
 | `af2034d` | Arity guard, quarantine, H1/H2 stats, testing gap targeting, 26 tests |
