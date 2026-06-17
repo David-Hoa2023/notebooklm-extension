@@ -35,12 +35,12 @@ Last updated: 2026-06-16 (afternoon). Living record of audits, Phase 5 hardening
 5. **SMTP Filter Hardening**: Tightened negative transfer filters on `NEG_001` / `smtplib` tasks to block insights containing authentication noise (`"login"`, `"starttls"`, `"xác thực"`, `"authentication"`).
 6. **Pytest Configuration**: Created `pytest.ini` to exclude the `scratch/` directory from test discovery.
 
-### Verified metrics (DeepSeek Smoke Test)
+### Verified metrics (DeepSeek 2-Seed Validation Run - Seeds 42,43)
 
 | Metric | Value | Detail |
 |--------|-------|--------|
-| Skill-backed coverage | **100.0%** | (Historical) All 10/10 Capabilities verified and active |
-| PG / SG / GG (1 seed) | **0.000 / 0.000 / 0.000** | Stable and complete execution of the training & held-out tasks (all solved at 9.0) |
+| Skill-backed coverage | **100.0%** | All 10/10 Capabilities verified and active |
+| PG / SG / GG (2 seeds)| **0.000 / 0.000 / 0.000** | Stable and complete execution of the training & held-out tasks (all solved at 9.0) |
 | Memory Poisoning | **Passed** | Toxic insights quarantined; agent successfully resisted poisoned advice |
 | SMTP NEG Filter | **Passed** | Mismatched domain skills, regex/email skills, and authentication insights correctly filtered |
 
