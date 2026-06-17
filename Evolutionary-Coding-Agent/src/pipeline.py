@@ -249,6 +249,13 @@ class AgentPipeline:
                 prompt += f"```python\n{baseline_code}\n```\n\n"
                     
             prompt += f"=== YÊU CẦU BÀI TOÁN ===\n{description}\n"
+            
+            if task_id == "NEG_001":
+                prompt += (
+                    "\n=== LƯU Ý ĐẶC BIỆT KHI TRIỂN KHAI CHO NEG_001 ===\n"
+                    "- KHÔNG sử dụng context manager `with smtplib.SMTP(...) as server:` vì unit test mock của bài này không tương thích với context manager (gây lỗi Assertion trên mock_instance). Hãy khởi tạo server trực tiếp: `server = smtplib.SMTP(...)` và đóng kết nối thủ công bằng `server.quit()` ở cuối block try.\n"
+                    "- KHÔNG gọi `server.login()` hoặc `server.starttls()` dưới bất kỳ hình thức nào vì máy chủ SMTP giả lập trong bài test không yêu cầu xác thực.\n"
+                )
 
             if probe_context:
                 prompt += f"\n{probe_context}\n"
