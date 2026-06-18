@@ -15,7 +15,7 @@ Last updated: 2026-06-18. Living record of audits, Phase 5 hardening, Phase 6 ev
 | LLM model | `deepseek-chat` (via DeepSeek API) |
 | Embedding model | `local-hashing` (local 768-dimensional hashing embeddings) |
 | DB backup | Clean rebuild with 768-dim embeddings |
-| Latest commit | `6fdcad3` — Refresh snapshot header and populate A/B evaluation results table in memory.md |
+| Latest commit | `36e62a8` — Update walkthrough.md with A/B evaluation results table and analysis |
 | Working tree | Clean |
 
 **Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
