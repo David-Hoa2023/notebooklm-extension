@@ -1,0 +1,632 @@
+version: "1.0.0"
+project_name: "Evolutionary-Coding-Agent-Dreaming"
+description: >-
+  Backlog to integrate offline "Dreaming" — synthetic session consolidation that distills raw
+  execution traces into clean cross-session wisdom without replaying noise into the next prompt.
+  Flow: [ Raw Event Logs ] -> [ Offline Dream Loop ] -> [ Distilled Synthetic Memories ] ->
+  [ Programmatic Load into Next Context ].
+
+# ---------------------------------------------------------------------------
+# ID RECONCILIATION:
+#   Tasks use DRM_ prefix (Dream). This epic is NET-NEW vs canonical roadmap and
+#   doc/backlog/evolutionary-loop.yaml (EL_*). maps_to lists related EL_/MEM_ ids for
+#   integration touchpoints only — do not duplicate their acceptance criteria here.
+#
+# Schema (per task): id, title, mode, priority, status, estimate, depends_on, owner,
+#   maps_to, metrics, tags, description, acceptance_criteria, files_touched (optional)
+#
+# mode:
+#   sequential — must run in listed order within the epic; one agent at a time
+#   parallel   — no dependency on other parallel tasks in same wave; multiple agents OK
+#
+# estimate: S (<4h) | M (4–12h) | L (1–2d) | XL (3–5d)
+#
+# AGENT EXECUTION GUIDE (read first):
+#   1. Respect depends_on globally — never start a task until dependencies are done.
+#   2. Within an epic, run sequential tasks in order; parallel tasks may run concurrently
+#      once their depends_on set is satisfied.
+#   3. After each task: run relevant pytest subset; update status in this file to done.
+#   4. Do NOT load interaction namespace or raw trace.jsonl into prompts — dreams only.
+#   5. Reuse lifecycle.py (dedup, quarantine, conflict) for dream namespace writes.
+#   6. Baseline (memoryless) runs must NOT receive dream injection (config gate).
+# ---------------------------------------------------------------------------
+
+open_decisions:
+  - id: "DRM_DEC_001"
+    question: "Dream bullet language — Vietnamese (match insights) or English (match skills)?"
+    default: "Vietnamese"
+    blocks: ["DRM_DIST_001"]
+  - id: "DRM_DEC_002"
+    question: "Dream scope — one global dream per project or per-seed (dream_seed_42.json)?"
+    default: "per-seed with optional global rollup"
+    blocks: ["DRM_STORE_001"]
+  - id: "DRM_DEC_003"
+    question: "Auto-promote high-confidence dreams to insight namespace?"
+    default: "false (manual promote command only for MVP)"
+    blocks: ["DRM_PROM_001"]
+
+execution_order:
+  - "Phase_0_Spec_and_Config"
+  - "Phase_1_Dream_Reader_and_Filter"
+  - "Phase_2_Dream_Distiller_and_Store"
+  - "Phase_3_Dream_Loader_and_Pipeline"
+  - "Phase_4_CLI_and_Orchestration"
+  - "Phase_5_Metrics_and_Evidence"
+  - "Phase_6_Safety_Governance_and_Docs"
+
+parallel_waves:
+  # Suggested multi-agent schedule after dependencies are met
+  wave_1:
+    description: "Foundation — single agent recommended"
+    tasks: ["DRM_SPEC_001", "DRM_CFG_001"]
+  wave_2:
+    description: "Reader + tests — one agent"
+    tasks: ["DRM_READ_001", "DRM_READ_002", "DRM_TEST_001"]
+  wave_3:
+    description: "Distiller + store — can split if DRM_READ_* done"
+    tasks: ["DRM_DIST_001", "DRM_STORE_001", "DRM_LIFE_001"]
+  wave_4:
+    description: "Loader + pipeline — sequential within agent"
+    tasks: ["DRM_LOAD_001", "DRM_PIPE_001", "DRM_TEST_002"]
+  wave_5:
+    description: "CLI + hooks — parallel with wave 4 tail after DRM_LOAD_001"
+    tasks: ["DRM_CLI_001", "DRM_ORCH_001"]
+  wave_6:
+    description: "Evidence + dashboard — after pipeline wired"
+    tasks: ["DRM_MET_001", "DRM_MET_002", "DRM_DASH_001"]
+  wave_7:
+    description: "Safety + docs — parallel cleanup"
+    tasks: ["DRM_SAFE_001", "DRM_SAFE_002", "DRM_DOC_001", "DRM_SCRATCH_001"]
+
+backlog:
+  # =========================================================================
+  - epic: "Phase_0_Spec_and_Config"
+    description: >-
+      Define session boundaries, artifact schema, config keys, and namespace conventions before
+      any implementation. Maps dreaming onto existing interaction / insight / skill tiers.
+    tasks:
+      - id: "DRM_SPEC_001"
+        title: "Dream artifact schema & session boundary spec"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "S"
+        depends_on: []
+        owner: ""
+        maps_to: ["EL_MEM_001", "EL_TASK_003"]
+        metrics: ["schema_validation_rate"]
+        tags: ["spec", "dreaming", "documentation"]
+        files_touched:
+          - "doc/backlog/dreaming.yaml"
+          - "doc/dreaming-schema.json"
+        description: >-
+          Document when a dream session starts/ends (run-all complete, explore complete, manual dream).
+          Define JSON schema for dream artifacts: session_id, source_trace, summary, insights[],
+          discarded_noise, token_budget_used, evidence_task_ids per insight. Define fourth memory
+          tier: namespace `dream` (session wisdom) above fragmented `insight` entries.
+        acceptance_criteria:
+          - "JSON schema file exists and validates example artifact from logs/trace.jsonl slice."
+          - "Session ID naming convention documented (e.g. run_all_2026-06-17_seeds42-47)."
+          - "Explicit rule: interaction namespace never loaded into prompt; dreams replace raw history."
+
+      - id: "DRM_CFG_001"
+        title: "config.yaml dreaming section"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_SPEC_001"]
+        owner: ""
+        maps_to: []
+        metrics: []
+        tags: ["config", "dreaming"]
+        files_touched:
+          - "config.yaml"
+          - "src/config.py"
+        description: >-
+          Add dreaming config block: enabled, max_dream_insights_in_prompt, max_summary_chars,
+          auto_run_after (run-all, explore), retain_sessions, token_budget, max_trace_events.
+          Wire config_instance getters with defaults safe for existing runs (enabled: false).
+        acceptance_criteria:
+          - "config.yaml contains dreaming section with documented defaults."
+          - "Existing run-all behavior unchanged when dreaming.enabled is false."
+          - "Config readable from src modules without import cycles."
+
+  # =========================================================================
+  - epic: "Phase_1_Dream_Reader_and_Filter"
+    description: >-
+      Deterministic ingestion: read trace.jsonl (+ optional interaction rows), strip noise,
+      compress to DreamSessionBundle for LLM reflection. No LLM in this phase.
+    tasks:
+      - id: "DRM_READ_001"
+        title: "DreamSessionBundle model & trace loader"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_SPEC_001", "DRM_CFG_001"]
+        owner: ""
+        maps_to: ["EL_OBS_003"]
+        metrics: ["trace_events_ingested", "compression_ratio"]
+        tags: ["dreaming", "observability", "reader"]
+        files_touched:
+          - "src/dreaming/__init__.py"
+          - "src/dreaming/dream_reader.py"
+          - "src/dreaming/models.py"
+        description: >-
+          Implement dream_reader.load_trace(path) -> DreamSessionBundle using
+          observability_manager.load_all_runs() patterns. Include pass_type, task_id, seed,
+          score, status, insight headline, failure_mode, skills_used — omit full code on pass.
+        acceptance_criteria:
+          - "Loads 6-seed run-all trace without error."
+          - "DreamSessionBundle is JSON-serializable and matches doc/dreaming-schema.json subset."
+          - "lifecycle_event rows excluded by default."
+
+      - id: "DRM_READ_002"
+        title: "Deterministic noise filter & compression"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_READ_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["compression_ratio", "noise_drop_rate"]
+        tags: ["dreaming", "filter"]
+        files_touched:
+          - "src/dreaming/dream_reader.py"
+          - "src/dreaming/filters.py"
+        description: >-
+          Strip: retry attempts (keep final outcome only), critique blobs over N chars, full code
+          on passed tasks, duplicate task×seed×pass rows. Cap bundle to config dreaming.max_trace_events.
+          Collapse metadata to evidence fields only.
+        acceptance_criteria:
+          - "compression_ratio = raw_trace_bytes / bundle_bytes logged; target >= 10x on 6-seed trace."
+          - "Failed tasks retain error summary + truncated code snippet (max 40 lines)."
+          - "Filter logic is pure Python — no LLM calls."
+
+      - id: "DRM_TEST_001"
+        title: "Unit tests for dream reader & filters"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_READ_002"]
+        owner: ""
+        maps_to: []
+        metrics: ["test_pass_rate"]
+        tags: ["dreaming", "tests"]
+        files_touched:
+          - "tests/test_dream_reader.py"
+          - "tests/fixtures/trace_dream_sample.jsonl"
+        description: >-
+          Fixture trace with retries, lifecycle events, NEG_001 failures — assert bundle size,
+          excluded events, and preserved failure evidence.
+        acceptance_criteria:
+          - "tests/test_dream_reader.py passes in CI with DEEPSEEK_API_KEY unset (no LLM import)."
+          - "At least 5 test cases covering pass collapse, retry drop, lifecycle exclude."
+
+  # =========================================================================
+  - epic: "Phase_2_Dream_Distiller_and_Store"
+    description: >-
+      LLM reflection loop: bundle -> distilled insights + session summary. Persist to SQLite
+      dream namespace and filesystem mirror under data/memory/dreams/.
+    tasks:
+      - id: "DRM_DIST_001"
+        title: "Dream distiller (LLM reflection with JSON schema)"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "L"
+        depends_on: ["DRM_READ_002", "DRM_DEC_001"]
+        owner: ""
+        maps_to: ["EL_MEM_002"]
+        metrics: ["dream_insights_per_session", "distiller_token_usage"]
+        tags: ["dreaming", "llm", "distiller"]
+        files_touched:
+          - "src/dreaming/dream_distiller.py"
+        description: >-
+          LLM call via LLMClient with JSON schema (DreamResult: session_summary, insights[],
+          noise_discarded_summary). Prompt includes compressed bundle + existing insight headlines
+          to avoid duplication. Respect dreaming.token_budget hard stop.
+        acceptance_criteria:
+          - "Produces valid DreamResult JSON on 2-seed trace slice."
+          - "Each insight includes evidence_task_ids referencing tasks in bundle."
+          - "Aborts with clear error when token budget exceeded; partial result not written."
+
+      - id: "DRM_STORE_001"
+        title: "Dream store — SQLite namespace + filesystem mirror"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_DIST_001", "DRM_DEC_002"]
+        owner: ""
+        maps_to: ["EL_MEM_001"]
+        metrics: ["dream_persistence_rate"]
+        tags: ["dreaming", "storage", "memory"]
+        files_touched:
+          - "src/memory/memory_engine.py"
+          - "src/memory/database.py"
+          - "src/dreaming/dream_store.py"
+          - "data/memory/dreams/.gitkeep"
+        description: >-
+          Add memory_engine.add_dream() and retrieve_dreams() for namespace `dream`. Write mirror
+          JSON to data/memory/dreams/<session_id>.json and dreams/latest.json symlink or copy.
+          Support per-seed artifacts when config scope is per-seed.
+        acceptance_criteria:
+          - "Dream rows stored with 768-dim local hashing embeddings (same as insight/skill)."
+          - "Filesystem mirror matches DB content for session_summary and insight list."
+          - "retain_sessions evicts oldest dream files and DB rows."
+
+      - id: "DRM_LIFE_001"
+        title: "Wire dream writes through lifecycle pipeline"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_STORE_001"]
+        owner: ""
+        maps_to: ["EL_MEM_007"]
+        metrics: ["lifecycle_invocation_rate"]
+        tags: ["dreaming", "lifecycle", "safety"]
+        files_touched:
+          - "src/memory/lifecycle.py"
+          - "src/memory/memory_engine.py"
+        description: >-
+          Route add_dream through deduplicate_and_merge (prose merge like insight namespace),
+          resolve_conflicts against insight namespace, quarantine on poison patterns. Log
+          lifecycle events to trace via observability_manager.log_lifecycle_event.
+        acceptance_criteria:
+          - "Duplicate dream insights merge; near-duplicate session summaries deduped."
+          - "Toxic pattern quarantine reuses existing importance>=9 + phrase rules."
+          - "Conflict with verified skill content: skill wins; conflicting dream insight dropped or softened."
+
+  # =========================================================================
+  - epic: "Phase_3_Dream_Loader_and_Pipeline"
+    description: >-
+      Programmatic loading at session start: inject session wisdom into pipeline prompt;
+      bypass raw history. Gate baseline (memoryless) and frozen second-pass writes.
+    tasks:
+      - id: "DRM_LOAD_001"
+        title: "Dream loader & prompt formatter"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_STORE_001"]
+        owner: ""
+        maps_to: ["EL_MEM_004"]
+        metrics: ["dream_load_latency_ms"]
+        tags: ["dreaming", "retrieval", "prompt"]
+        files_touched:
+          - "src/dreaming/dream_loader.py"
+        description: >-
+          dream_loader.format_for_prompt(seed, limit) returns markdown block:
+          === SESSION WISDOM (dream) === with top-1 session_summary + top-k dream insights by
+          relevance/importance/recency. Enforce max_summary_chars. Return empty string if disabled
+          or no dreams for seed.
+        acceptance_criteria:
+          - "Prompt block never exceeds config dreaming.max_summary_chars."
+          - "No raw trace lines or interaction content in formatted output."
+          - "Returns empty when dreaming.enabled is false."
+
+      - id: "DRM_PIPE_001"
+        title: "Pipeline integration — inject dreams before insight/skill retrieval"
+        mode: "sequential"
+        priority: "critical"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_LOAD_001"]
+        owner: ""
+        maps_to: ["EL_TASK_003"]
+        metrics: ["dream_injection_rate"]
+        tags: ["dreaming", "pipeline", "integration"]
+        files_touched:
+          - "src/pipeline.py"
+        description: >-
+          In AgentPipeline.execute_task when memory_enabled and NOT baseline mode: prepend dream
+          block before existing insight/skill sections. Do NOT inject when memory_enabled=False
+          (baseline) or when explicitly frozen_memory-only regression (config: load_dreams_on_frozen:
+          false default). Log dreams_retrieved IDs in val_res metadata and trace.
+        acceptance_criteria:
+          - "First-pass and explore runs show dreams_retrieved in trace metadata when enabled."
+          - "Baseline runs show dreams_retrieved=[] always."
+          - "Prompt order: dream -> insight -> skill -> task (matches spec)."
+
+      - id: "DRM_TEST_002"
+        title: "Integration tests for loader & pipeline injection"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_PIPE_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["test_pass_rate"]
+        tags: ["dreaming", "tests", "pipeline"]
+        files_touched:
+          - "tests/test_dream_loader.py"
+          - "tests/test_dream_pipeline.py"
+        description: >-
+          Mock dream store with fixture JSON; assert pipeline prompt contains SESSION WISDOM header
+          and excludes interaction content. Test baseline gate and char limit truncation.
+        acceptance_criteria:
+          - "tests pass without live DeepSeek call (mock LLMClient / mock dream store)."
+          - "Baseline pipeline fixture asserts zero dream injection."
+
+  # =========================================================================
+  - epic: "Phase_4_CLI_and_Orchestration"
+    description: >-
+      CLI commands and automatic post-session hooks for run-all and explore.
+    tasks:
+      - id: "DRM_CLI_001"
+        title: "run.py dream command"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_DIST_001", "DRM_STORE_001"]
+        owner: ""
+        maps_to: []
+        metrics: ["cli_success_rate"]
+        tags: ["dreaming", "cli"]
+        files_touched:
+          - "run.py"
+        description: >-
+          Add commands: `python run.py dream` (latest trace), `python run.py dream --trace PATH
+          --session-id ID`, `python run.py dream --seeds 42,43`. Print summary + path to artifact.
+          Update print_help().
+        acceptance_criteria:
+          - "dream command runs end-to-end on existing logs/trace.jsonl."
+          - "Exits non-zero on missing trace or empty bundle."
+          - "Documented in run.py help text."
+
+      - id: "DRM_ORCH_001"
+        title: "Auto-dream hooks after run-all and explore"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_CLI_001", "DRM_PIPE_001"]
+        owner: ""
+        maps_to: ["EL_EXPLORE_006"]
+        metrics: ["auto_dream_success_rate"]
+        tags: ["dreaming", "orchestration"]
+        files_touched:
+          - "src/dreaming/dream_orchestrator.py"
+          - "run.py"
+          - "src/exploration/exploration_loop.py"
+          - "src/evaluation.py"
+        description: >-
+          dream_orchestrator.run_after_session(session_type, trace_path, seeds) called at end of
+          run-all (after dashboard) and explore when config dreaming.auto_run_after includes the
+          command. Archive trace before dream if not already archived. Log dream_completed event.
+        acceptance_criteria:
+          - "run-all with dreaming.enabled true produces dream artifact without extra manual step."
+          - "explore hook produces per-seed or combined dream per DRM_DEC_002 default."
+          - "Failure in dream step does not fail entire run-all (warn + trace event)."
+
+  # =========================================================================
+  - epic: "Phase_5_Metrics_and_Evidence"
+    description: >-
+      Measure whether dreaming helps: PG/SG A/B, compression ratio, dashboard panel.
+      Addresses null-effect-at-9.0-ceiling research gap.
+    tasks:
+      - id: "DRM_MET_001"
+        title: "Dream metrics in observability.calculate_metrics"
+        mode: "sequential"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_ORCH_001"]
+        owner: ""
+        maps_to: ["EL_OBS_003"]
+        metrics: ["dream_compression_ratio", "dream_sessions_count"]
+        tags: ["dreaming", "metrics", "observability"]
+        files_touched:
+          - "src/observability.py"
+        description: >-
+          Extend calculate_metrics summary with: dream_sessions_count, mean_compression_ratio,
+          last_dream_summary_snippet, dreams_loaded_per_run (from trace metadata). Optional:
+          PG_with_dreams vs PG_without from tagged trace runs.
+        acceptance_criteria:
+          - "calculate_metrics() returns dream fields without error when no dreams exist."
+          - "Dashboard JSON embed includes dream summary section."
+
+      - id: "DRM_MET_002"
+        title: "A/B evaluation protocol — dreaming on vs off"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "L"
+        depends_on: ["DRM_PIPE_001", "DRM_ORCH_001"]
+        owner: ""
+        maps_to: ["EL_OBS_003"]
+        metrics: ["PG", "SG", "GG", "NEG_001_score"]
+        tags: ["dreaming", "evaluation", "rigor"]
+        files_touched:
+          - "memory.md"
+          - "doc/dreaming-ab-protocol.md"
+        description: >-
+          Document and execute: (A) run-all seeds 42,43 dreaming.enabled false; (B) same with true,
+          dreams loaded on first-pass only; (C) optional dreams on explore only. Record PG/SG/GG,
+          NEG_001 scores, dream compression. Honest framing: ceiling saturation may still yield PG=0.
+        acceptance_criteria:
+          - "doc/dreaming-ab-protocol.md exists with exact commands and seed list."
+          - "At least one A/B pair executed; results logged in memory.md session log."
+          - "NEG_001 scores reported separately from training tasks."
+
+      - id: "DRM_DASH_001"
+        title: "Dashboard Phase 7 — Dream sessions panel"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_MET_001"]
+        owner: ""
+        maps_to: ["EL_OBS_003"]
+        metrics: ["dashboard_render_success"]
+        tags: ["dreaming", "dashboard", "ui"]
+        files_touched:
+          - "src/observability.py"
+          - "logs/dashboard.html"
+        description: >-
+          Add HTML panel: dream session count, last summary (truncated), compression ratio,
+          insights distilled vs loaded. Link to data/memory/dreams/latest.json path note.
+        acceptance_criteria:
+          - "generate_html_dashboard renders dream panel without JS errors."
+          - "Panel shows 'no dreams yet' gracefully when empty."
+
+  # =========================================================================
+  - epic: "Phase_6_Safety_Governance_and_Docs"
+    description: >-
+      Prevent dream-specific cheats, hallucinated insights, and doc drift. Optional promote path.
+    tasks:
+      - id: "DRM_SAFE_001"
+        title: "Dream scope tagging — block session-specific test hacks from global load"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "M"
+        depends_on: ["DRM_STORE_001"]
+        owner: ""
+        maps_to: ["EL_ROB_001"]
+        metrics: ["scoped_dream_leak_rate"]
+        tags: ["dreaming", "safety", "robustness"]
+        files_touched:
+          - "src/dreaming/dream_distiller.py"
+          - "src/dreaming/dream_loader.py"
+        description: >-
+          Tag each dream insight with scope: global | session | task. NEG_001 mock hints (with block,
+          quit, no login) must be scope=session or task — never loaded on unrelated tasks. Loader
+          filters by scope + domain match on task description.
+        acceptance_criteria:
+          - "NEG-specific mock instructions stored as scope=task only."
+          - "Loader never injects task-scoped dreams into different task_ids."
+          - "Unit test proves SMTP cheat insight blocked on SUB_001."
+
+      - id: "DRM_SAFE_002"
+        title: "Evidence-required gate — drop dreams without trace evidence"
+        mode: "parallel"
+        priority: "high"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_DIST_001"]
+        owner: ""
+        maps_to: ["EL_MEM_007"]
+        metrics: ["hallucinated_dream_drop_rate"]
+        tags: ["dreaming", "safety", "validation"]
+        files_touched:
+          - "src/dreaming/dream_distiller.py"
+        description: >-
+          Post-process DreamResult: drop insights where evidence_task_ids empty or not in bundle.
+          Drop insights with confidence below config dreaming.min_confidence (default 0.6).
+        acceptance_criteria:
+          - "Distiller output with fake task id is rejected before store."
+          - "Rejected insights logged in dream artifact discarded_noise section."
+
+      - id: "DRM_PROM_001"
+        title: "Optional dream promote command (insight promotion)"
+        mode: "parallel"
+        priority: "low"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_STORE_001", "DRM_DEC_003"]
+        owner: ""
+        maps_to: []
+        metrics: ["promotion_count"]
+        tags: ["dreaming", "cli", "optional"]
+        files_touched:
+          - "run.py"
+          - "src/dreaming/dream_store.py"
+        description: >-
+          `python run.py dream-promote --id drm_xxx` copies dream insight to insight namespace
+          with provenance metadata.source_dream_id. Disabled by default auto-promote.
+        acceptance_criteria:
+          - "Manual promote creates insight row and logs lifecycle event."
+          - "Promoted insight appears in normal retrieval; dream row unchanged."
+
+      - id: "DRM_DOC_001"
+        title: "Documentation — use-case, walkthrough, memory session log"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_MET_002", "DRM_DASH_001"]
+        owner: ""
+        maps_to: []
+        metrics: []
+        tags: ["dreaming", "documentation"]
+        files_touched:
+          - "use-case.md"
+          - "walkthrough.md"
+          - "memory.md"
+          - "blog.md"
+        description: >-
+          Add Dr. Lin §4 or new section: offline dreaming loop, honest metrics framing, CLI examples.
+          Update memory.md snapshot when dreaming MVP ships.
+        acceptance_criteria:
+          - "use-case.md includes dream workflow with PowerShell commands."
+          - "walkthrough distinguishes online consolidation vs offline dreaming."
+
+      - id: "DRM_SCRATCH_001"
+        title: "verify_dream_session.py checklist script"
+        mode: "parallel"
+        priority: "medium"
+        status: "done"
+        estimate: "S"
+        depends_on: ["DRM_CLI_001", "DRM_MET_001"]
+        owner: ""
+        maps_to: []
+        metrics: []
+        tags: ["dreaming", "verification", "scratch"]
+        files_touched:
+          - "scratch/verify_dream_session.py"
+        description: >-
+          Mirror verify_memory_evidence.py: check artifact exists, compression ratio, dream rows in DB,
+          pipeline metadata dreams_retrieved, lifecycle events. PYTHONPATH=. runner.
+        acceptance_criteria:
+          - "Script prints PASS/FAIL checklist for last dream session."
+          - "Documented in use-case.md verify section."
+
+# ---------------------------------------------------------------------------
+# MVP CUT LINE (minimum shippable dreaming loop):
+#   DRM_SPEC_001 -> DRM_CFG_001 -> DRM_READ_001 -> DRM_READ_002 -> DRM_DIST_001 ->
+#   DRM_STORE_001 -> DRM_LOAD_001 -> DRM_PIPE_001 -> DRM_CLI_001
+#   Exit: `python run.py dream` + next first-pass shows SESSION WISDOM in trace.
+#
+# FULL EPIC (production-ready):
+#   All tasks through Phase_6 with DRM_MET_002 A/B evidence.
+# ---------------------------------------------------------------------------
+
+agent_notes:
+  sequential_critical_path:
+    - "DRM_SPEC_001"
+    - "DRM_CFG_001"
+    - "DRM_READ_001"
+    - "DRM_READ_002"
+    - "DRM_DIST_001"
+    - "DRM_STORE_001"
+    - "DRM_LIFE_001"
+    - "DRM_LOAD_001"
+    - "DRM_PIPE_001"
+    - "DRM_CLI_001"
+    - "DRM_ORCH_001"
+  parallel_after_store:
+    - "DRM_SAFE_001"
+    - "DRM_SAFE_002"
+    - "DRM_TEST_001"
+    - "DRM_TEST_002"
+    - "DRM_DASH_001"
+    - "DRM_DOC_001"
+  do_not:
+    - "Inject raw trace.jsonl or interaction namespace into prompts"
+    - "Auto-promote dreams to insight without DRM_PROM_001 and explicit config"
+    - "Run dream distiller during baseline or frozen second-pass evaluation"
+    - "Skip lifecycle dedup/quarantine on dream writes"
+  test_commands:
+    unit: ".venv\\Scripts\\python -m pytest tests/test_dream_reader.py tests/test_dream_loader.py -q"
+    dream_cli: ".venv\\Scripts\\python run.py dream --trace logs/trace.jsonl"
+    verify: "$env:PYTHONPATH='.'; .venv\\Scripts\\python scratch/verify_dream_session.py"
+    regression: ".venv\\Scripts\\python -m pytest tests/ -q"

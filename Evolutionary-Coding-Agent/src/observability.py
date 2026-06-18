@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import glob
 import numpy as np
 from src.config import config_instance
 
@@ -427,6 +428,13 @@ class ObservabilityManager:
                 "passed_explore_tasks_count": len(passed_explore_tasks),
                 "failed_exploration_logs": failed_exploration_logs,
                 "seed_breakdown_str": seed_breakdown_str
+            },
+            "dreaming": {
+                "dream_sessions_count": int(len(glob.glob(os.path.join("data/memory/dreams", "*.json")))) - (1 if os.path.exists("data/memory/dreams/latest.json") else 0),
+                "mean_compression_ratio": float(round(np.mean([json.load(open(f, "r", encoding="utf-8")).get("compression_ratio", 1.0) for f in glob.glob(os.path.join("data/memory/dreams", "*.json")) if os.path.basename(f) != "latest.json"]), 2)) if glob.glob(os.path.join("data/memory/dreams", "*.json")) else 1.0,
+                "last_dream_summary_snippet": (json.load(open("data/memory/dreams/latest.json", "r", encoding="utf-8")).get("session_summary", "")[:120] + "..." if len(json.load(open("data/memory/dreams/latest.json", "r", encoding="utf-8")).get("session_summary", "")) > 120 else json.load(open("data/memory/dreams/latest.json", "r", encoding="utf-8")).get("session_summary", "")) if os.path.exists("data/memory/dreams/latest.json") else "N/A",
+                "dreams_loaded_count": int(sum(len(r["metadata"].get("dreams_retrieved", [])) for r in all_raw_runs if isinstance(r, dict) and "metadata" in r and isinstance(r["metadata"], dict) and "dreams_retrieved" in r["metadata"])),
+                "mean_dreams_loaded": float(round(np.mean([len(r["metadata"].get("dreams_retrieved", [])) for r in all_raw_runs if isinstance(r, dict) and "metadata" in r and isinstance(r["metadata"], dict) and "dreams_retrieved" in r["metadata"]]), 2)) if [len(r["metadata"].get("dreams_retrieved", [])) for r in all_raw_runs if isinstance(r, dict) and "metadata" in r and isinstance(r["metadata"], dict) and "dreams_retrieved" in r["metadata"]] else 0.0
             }
         }
 
@@ -913,6 +921,31 @@ class ObservabilityManager:
             <div id="failed-logs-list" style="margin-top: 1rem; font-family: monospace; font-size: 0.85rem; max-height: 300px; overflow-y: auto;">
             </div>
         </div>
+
+        <!-- Phase 7 Offline Dreaming Section -->
+        <div class="section-header" style="margin-top: 2rem;">Phase 7: Offline Dreaming & Session Distillation</div>
+        
+        <div class="summary-grid">
+            <div class="card">
+                <div class="card-label">Dream Sessions Count</div>
+                <div class="card-value" id="dream-sessions-count">0</div>
+                <div class="card-desc">Phiên chắt lọc bài học offline</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Mean Compression Ratio</div>
+                <div class="card-value" id="dream-compression-ratio">1.0x</div>
+                <div class="card-desc">Tỉ lệ nén trace log trung bình</div>
+            </div>
+            <div class="card success">
+                <div class="card-label">Dreams Loaded (E2E)</div>
+                <div class="card-value" id="dreams-loaded-count">0</div>
+                <div class="card-desc" id="dreams-loaded-desc">Số lần nạp bài học thành công</div>
+            </div>
+            <div class="card warning" style="grid-column: span 2;">
+                <div class="card-label">Last Session Summary snippet</div>
+                <div class="card-desc" id="last-dream-summary" style="font-style: italic; margin-top: 0.5rem; font-size: 0.9rem; line-height: 1.4;">N/A</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -924,6 +957,17 @@ class ObservabilityManager:
         
         // Populate cards
         const summary = data.summary;
+        
+        // Dreaming Population
+        if (data.dreaming) {{
+            const drm = data.dreaming;
+            document.getElementById('dream-sessions-count').innerText = drm.dream_sessions_count || 0;
+            document.getElementById('dream-compression-ratio').innerText = (drm.mean_compression_ratio || 1.0).toFixed(2) + "x";
+            document.getElementById('dreams-loaded-count').innerText = drm.dreams_loaded_count || 0;
+            document.getElementById('dreams-loaded-desc').innerText = "Trung bình nạp " + (drm.mean_dreams_loaded || 0) + " bài học/task";
+            document.getElementById('last-dream-summary').innerText = drm.last_dream_summary_snippet || "N/A";
+        }}
+
         document.getElementById('pg-val').innerText = (summary.mean_plasticity_gain >= 0 ? "+" : "") + summary.mean_plasticity_gain.toFixed(2);
         document.getElementById('sg-val').innerText = (summary.mean_stability_gain >= 0 ? "+" : "") + summary.mean_stability_gain.toFixed(2);
         document.getElementById('gg-val').innerText = (summary.mean_generalization_gain >= 0 ? "+" : "") + summary.mean_generalization_gain.toFixed(2);

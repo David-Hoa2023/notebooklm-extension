@@ -1,5 +1,6 @@
 import re
 import ast
+from src.config import config_instance
 from src.llm import llm_client
 from src.memory.memory_engine import memory_engine
 from src.memory.validation_gate import validation_gate
@@ -109,9 +110,25 @@ class AgentPipeline:
         
         retrieved_insights = []
         retrieved_skills = []
+        dream_block = ""
+        dreams_retrieved = []
         
         # 1. Retrieve memory
         if self.memory_enabled:
+            # Check dreaming config and load_dreams_on_frozen flag
+            if config_instance.get("dreaming.enabled", False) and (not self.frozen_memory or config_instance.get("dreaming.load_dreams_on_frozen", False)):
+                from src.dreaming.dream_loader import dream_loader
+                from src.dreaming.dream_store import dream_store
+                dream_limit = config_instance.get("dreaming.max_dream_insights_in_prompt", 3)
+                dream_block = dream_loader.format_for_prompt(description=description, task_id=task_id, limit=dream_limit)
+                
+                try:
+                    candidates = dream_store.retrieve_dreams(query_text=description, limit=dream_limit + 2)
+                    # Exclude the session summary memory row from ID tracking
+                    dreams_retrieved = [c["id"] for c in candidates if not c.get("content", "").startswith("[SUMMARY]")]
+                    dreams_retrieved = dreams_retrieved[:dream_limit]
+                except Exception as e:
+                    print(f"[{task_id}] Failed to retrieve dream IDs: {e}")
             insight_limit = 1 if self.frozen_memory else 2
             skill_limit = 1 if self.frozen_memory else 2
 
@@ -218,6 +235,9 @@ class AgentPipeline:
             )
             
             prompt = ""
+            if dream_block:
+                prompt += dream_block + "\n\n"
+                
             if self.memory_enabled:
                 prompt += "=== TÀI LIỆU THAM KHẢO & KINH NGHIỆM ĐÃ TÍCH LŨY ===\n"
                 prompt += (
@@ -384,6 +404,7 @@ class AgentPipeline:
             "skills_extracted": skills_extracted,
             "insights_retrieved": [ins["id"] for ins in retrieved_insights],
             "skills_retrieved": [sk["id"] for sk in retrieved_skills],
+            "dreams_retrieved": dreams_retrieved,
             "self_correction_attempts": retry_count,
             "self_correction_success": (val_res["status"] == "passed" and retry_count > 0),
             "execution_mode": val_res.get("execution_mode", "unknown"),

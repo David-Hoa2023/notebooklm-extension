@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DreamResult",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "source_trace": {
+      "type": "string"
+    },
+    "session_summary": {
+      "type": "string"
+    },
+    "insights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "importance": {
+            "type": "number",
+            "minimum": 1.0,
+            "maximum": 10.0
+          },
+          "evidence_task_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["global", "session", "task"]
+          },
+          "domain": {
+            "type": "string"
+          }
+        },
+        "required": ["content", "importance", "evidence_task_ids", "scope", "domain"]
+      }
+    },
+    "noise_discarded_summary": {
+      "type": "string"
+    },
+    "token_budget_used": {
+      "type": "integer"
+    }
+  },
+  "required": ["session_summary", "insights", "noise_discarded_summary"]
+}

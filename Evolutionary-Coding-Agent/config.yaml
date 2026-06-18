@@ -14,7 +14,7 @@ sandbox:
   cpu_limit: 1.0
   mem_limit: "256m"
   timeout_seconds: 10
-  refuse_fallback: true
+  refuse_fallback: false
 
 
 memory:
@@ -39,5 +39,17 @@ exploration:
   epsilon: 0.35
   min_epsilon: 0.1
   budget_tokens: 200000
+
+dreaming:
+  enabled: true
+  max_dream_insights_in_prompt: 3
+  max_summary_chars: 1000
+  auto_run_after: ["run-all", "explore"]
+  retain_sessions: 5
+  token_budget: 150000
+  max_trace_events: 100
+  min_confidence: 0.6
+  load_dreams_on_frozen: false
+
 
 

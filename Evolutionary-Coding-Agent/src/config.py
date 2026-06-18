@@ -27,6 +27,9 @@ class Config:
         log_dir = self.get("observability.log_dir", "logs")
         os.makedirs(log_dir, exist_ok=True)
         
+        # Dreams folder setup
+        os.makedirs("data/memory/dreams", exist_ok=True)
+        
         # Temp sandbox directory inside the workspace
         os.makedirs("temp_sandbox", exist_ok=True)
 

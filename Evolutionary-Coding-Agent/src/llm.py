@@ -8,13 +8,16 @@ from src.config import config_instance
 
 class LLMClient:
     def __init__(self):
-        # Require DeepSeek key from env variable
-        api_key = os.environ.get("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise ValueError("Environment variable DEEPSEEK_API_KEY is not set.")
-        self.api_key = api_key
+        # Do not require DeepSeek key on instantiation to allow keyless test collection
         self.base_url = "https://api.deepseek.com/v1"
         self.default_model = config_instance.get("llm.model", "deepseek-chat")
+
+    @property
+    def api_key(self):
+        key = os.environ.get("DEEPSEEK_API_KEY")
+        if not key:
+            raise ValueError("Environment variable DEEPSEEK_API_KEY is not set.")
+        return key
 
     def generate(self, prompt: str, system_instruction: str = None, temperature: float = None, json_mode: bool = False, response_schema = None) -> str:
         """

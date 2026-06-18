@@ -154,9 +154,9 @@ Hãy gộp chúng lại sao cho không mất thông tin quan trọng của cả 
 
     def resolve_conflicts(self, namespace: str, new_content: str) -> None:
         """
-        Check for direct contradictions between new insight and existing insights.
+        Check for direct contradictions between new insight/dream and existing insights.
         """
-        if namespace != "insight":
+        if namespace not in ["insight", "dream"]:
             return
             
         try:
@@ -164,8 +164,9 @@ Hãy gộp chúng lại sao cho không mất thông tin quan trọng của cả 
         except Exception:
             return
             
-        # Retrieve top 5 relevant insights
-        candidates = self.db.search_memories(namespace, new_content, emb, limit=5)
+        # Always resolve conflicts against 'insight' namespace to maintain consistency
+        search_ns = "insight"
+        candidates = self.db.search_memories(search_ns, new_content, emb, limit=5)
         if not candidates:
             return
             

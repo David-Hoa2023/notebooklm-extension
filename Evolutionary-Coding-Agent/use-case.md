@@ -590,6 +590,24 @@ Ensure `lifecycle.py` namespace-aware skill merge is in place before resuming ex
 
 ---
 
+### Guide H — Offline Dreaming & Session Distillation
+
+**Goal:** Distill large raw run traces (`trace.jsonl`) into compact, high-value coding lessons and inject them into subsequent first-pass/explore runs.
+
+| Step | Action | Expected result |
+|------|--------|-----------------|
+| 1 | Toggle dreaming in `config.yaml` if needed: `dreaming.enabled: true` | Loader activated for subsequent runs |
+| 2 | Distill raw traces manually: `python run.py dream --trace logs/trace.jsonl` | Dream file written to `data/memory/dreams/<session_id>.json` |
+| 3 | Promote a dream to permanent `insight` namespace: `python run.py dream-promote --id drm_xxx` | Copied to insight database with `source_dream_id` |
+| 4 | Run verify checklist: `python scratch/verify_dream_session.py` | Checklist prints PASS/FAIL for all modules |
+
+**Safety features:**
+- **Confidence gate**: Distilled insights with confidence < `dreaming.min_confidence` (default 0.6) are rejected.
+- **Evidence verification**: Insights lacking valid `evidence_task_ids` from the trace bundle are discarded.
+- **Context boundary**: Task-scoped dreams are only loaded if the current task description matches the original task.
+
+---
+
 ## Workflow diagram
 
 ```mermaid

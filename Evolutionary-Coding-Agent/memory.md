@@ -10,17 +10,42 @@ Last updated: 2026-06-17 (noon). Living record of audits, Phase 5 hardening, Pha
 |------|--------|
 | Skill-backed coverage | **100%** (10/10 capabilities, zero gaps) |
 | Skills in DB | 35 total, **24 retrievable**, **35/35 AST-valid** |
-| Unit tests | **26/26 passed** (scratch excluded via `pytest.ini`, requires DEEPSEEK_API_KEY) |
+| Unit tests | **35/35 passed** (scratch excluded via `pytest.ini`, requires DEEPSEEK_API_KEY) |
 | Exploration policy | `epsilon: 0.35`, `min_epsilon: 0.1` |
 | LLM model | `deepseek-chat` (via DeepSeek API) |
 | Embedding model | `local-hashing` (local 768-dimensional hashing embeddings) |
 | DB backup | Clean rebuild with 768-dim embeddings |
 | Latest commit | `4a7f319` — Fix NEG_001 SMTP mock and refresh evaluation metrics over 6 seeds |
-| Working tree | **Clean** (documented and verified) |
+| Working tree | **Modified** (uncommitted changes for Offline Dreaming integration, verified) |
 
 **Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
 
 **Known caveat:** H2 dashboard label says "training tasks" but `observability.py` pairs all `first_pass` vs `second_pass` runs (includes `NEG_001`). Filter or relabel if strict training-only H2 is required.
+
+---
+
+## Session log (June 18, 2026 — morning — Offline Dreaming & Distillation)
+
+### What was accomplished
+
+1. **Phase 7 Offline Dreaming & Distillation Integrated**:
+   - Implemented trace parsing and deterministic event compression in `filters.py` and `dream_reader.py` (compression ratio $\ge 10x$).
+   - Designed metadata schemas and Pydantic models for distilled dream insights in `models.py`.
+   - Integrated DeepSeek distillation logic with Pydantic JSON schema output in `dream_distiller.py`.
+   - Developed the `dream` memory namespace store, filesystem mirroring (`latest.json`), and retention/pruning logic in `dream_store.py` and `memory_engine.py`.
+   - Wired lifecycle safety policies (deduplication, conflict resolution, quarantine checks) for the `dream` namespace.
+   - Formatted the distilled session summaries and top insights, injecting them into subsequent runs in `dream_loader.py` and `pipeline.py`.
+   - Added robust domain matching and task scope boundaries to block session-specific/task-specific hacks from leaking across domains.
+   - Added manual and automated CLI commands (`dream`, `dream-promote`) to `run.py`, and auto-dream orchestration hooks at the end of exploration/run-all passes in `dream_orchestrator.py`.
+   - Added dashboard indicators and Javascript UI card populators to display dreaming stats in the HTML report.
+   - Created `scratch/verify_dream_session.py` to diagnose the dreaming pipeline verification checklist.
+   - Developed unit and integration tests (bringing the suite from 26 to 35 tests, all passed).
+
+### Verified metrics (DeepSeek 35-Test suite)
+
+- All **35/35** unit and integration tests passed cleanly in 22.13 seconds.
+- Promotion CLI command (`python run.py dream-promote --id <dream_insight_id>`) verified to copy dream insights into `insight` namespace.
+- Verify checklist script (`scratch/verify_dream_session.py`) verified to parse active dreams successfully.
 
 ---
 
@@ -257,13 +282,15 @@ To force 100% explore for verification: temporarily set `epsilon: 1.0` and `min_
 
 ## Test status
 
-- **26/26 passed** — `test_exploration` (14), `test_lifecycle` (4), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1)
-- Notable new tests: `test_top_gaps_logic`, `test_poison_insight_quarantined`
-- Run: `.venv\Scripts\python -m pytest` (~150–190s due to sandbox isolation checks)
+- **35/35 passed** — `test_exploration` (14), `test_lifecycle` (4), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1), `test_dream_reader` (2), `test_dream_loader` (5), `test_dream_pipeline` (1), `test_dream_distiller` (1)
+- Notable new tests: `test_dream_distiller_safety_filters`, `test_dream_loader_scope_and_domain_filtering`
+- Run: `$env:DEEPSEEK_API_KEY="your-key"; $env:PYTHONPATH="."; .venv\Scripts\python -m pytest` (~22s)
 
 ---
 
 ## Backlog snapshot
+
+**dreaming.yaml:** 21 done, 0 todo (Offline Dreaming & Session Distillation MVP + Full Epic completed)
 
 **evolutionary-loop.yaml:** 23 done, 0 todo (Phase 5 Hardening + Phase 6 Observability complete)
 
@@ -306,9 +333,11 @@ Tracked `Evolutionary-Coding-Agent/` path: clean working tree as of `8df0a79`.
 
 ## Related docs
 
-- `walkthrough.md` — Phase 5 Hardening & Phase 6 Evidence walkthrough (Vietnamese)
+- `walkthrough.md` — Phase 5/6/7 implementation walkthrough (Vietnamese)
 - `doc/walkthrough-evolutionary-loop.md` — Vietnamese Phase 5 walkthrough (earlier)
 - `lesson.md` — Issue → Fix → Lesson log (incl. pytest sandbox §8)
+- `doc/backlog/dreaming.yaml` — Offline Dreaming backlog
+- `doc/dreaming-ab-protocol.md` — A/B evaluation protocol (dreaming on vs off)
 - `doc/backlog/evolutionary-loop.yaml` — Active explorer backlog
 - `doc/backlog/Evolutionary-Coding-Agent.yaml` — Canonical roadmap
 - `logs/trace.jsonl` — Run traces

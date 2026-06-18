@@ -165,10 +165,73 @@ class MemoryEngine:
             print(f"Failed to add skill: {e}")
             return ""
 
+    def add_dream(self, content: str, importance: float = 5.0, metadata: dict = None) -> str:
+        """
+        Record a distilled dream lesson or summary in the 'dream' namespace.
+        """
+        from src.memory.lifecycle import lifecycle_manager
+        if metadata is None:
+            metadata = {}
+        metadata["version"] = config_instance.get("project.version", "1.0.0")
+        
+        # Quarantine criteria check: importance >= 9.0 and contains "LUÔN LUÔN trả về"
+        if importance >= 9.0 and "LUÔN LUÔN trả về" in content:
+            print(f"Quarantining toxic dream due to importance >= 9 and content: {content[:50]}...")
+            status = "quarantined"
+            metadata["status"] = "quarantined"
+            memory_id = f"drm_{uuid.uuid4().hex}"
+            try:
+                embedding = self.llm.embed(content)
+                self.db.add_memory(
+                    memory_id=memory_id,
+                    namespace="dream",
+                    content=content,
+                    embedding=embedding,
+                    task_id=None,
+                    status=status,
+                    importance=importance,
+                    metadata=metadata
+                )
+                lifecycle_manager.enforce_capacity("dream")
+                return memory_id
+            except Exception as e:
+                print(f"Failed to add quarantined dream: {e}")
+                return ""
+
+        # 1. Deduplicate & Merge (similar logic to insight)
+        is_merged, old_id = lifecycle_manager.deduplicate_and_merge("dream", content, importance, "success", metadata)
+        if is_merged:
+            return old_id
+            
+        # 2. Resolve Conflicts against insight namespace
+        lifecycle_manager.resolve_conflicts("dream", content)
+            
+        # 3. Add memory
+        memory_id = f"drm_{uuid.uuid4().hex}"
+        try:
+            embedding = self.llm.embed(content)
+            self.db.add_memory(
+                memory_id=memory_id,
+                namespace="dream",
+                content=content,
+                embedding=embedding,
+                task_id=None,
+                status="success",
+                importance=importance,
+                metadata=metadata
+            )
+            # 4. Enforce capacity
+            lifecycle_manager.enforce_capacity("dream")
+            return memory_id
+        except Exception as e:
+            print(f"Failed to add dream: {e}")
+            return ""
+
     def clear_all(self):
         self.db.clear_namespace("interaction")
         self.db.clear_namespace("insight")
         self.db.clear_namespace("skill")
+        self.db.clear_namespace("dream")
 
     def create_snapshot(self, version_name: str) -> str:
         """

@@ -31,6 +31,8 @@ Các lệnh khả dụng:
   report            Xuất kết quả đo lường và sinh Dashboard HTML báo cáo trực quan
   explore           Chạy Phase 5 Active Exploration (tự đề xuất, probe, oracle)
   run-all           Chạy tuần tự toàn bộ quy trình trên và sinh báo cáo
+  dream             Chạy offline Dreaming để đúc rút bài học từ trace log
+  dream-promote     Thăng chức (promote) một bài học từ dream sang insight namespace
 """)
 
 
@@ -107,6 +109,11 @@ def main():
             print(f"\n--- Exploration Seed {seed} ---")
             exploration_loop.run_exploration_pass(seed=seed)
         observability_manager.generate_html_dashboard()
+        
+        # Auto-dream hook
+        from src.dreaming.dream_orchestrator import dream_orchestrator
+        dream_orchestrator.run_after_session(session_type="explore", trace_path=observability_manager.trace_file, seeds=seeds)
+        
         print("Active exploration pass completed.")
         
     elif cmd == "run-all":
@@ -138,11 +145,88 @@ def main():
         # 6. Report
         observability_manager.generate_html_dashboard()
         
+        # Auto-dream hook
+        from src.dreaming.dream_orchestrator import dream_orchestrator
+        dream_orchestrator.run_after_session(session_type="run-all", trace_path=observability_manager.trace_file, seeds=seeds)
+        
         print("\n=========================================================")
         print("HOÀN THÀNH TOÀN BỘ PIPELINE THỬ NGHIỆM!")
         print(f"Bạn có thể mở file báo cáo tại: {os.path.abspath(observability_manager.dashboard_file)}")
         print("=========================================================")
         
+    elif cmd == "dream":
+        import time
+        trace_path = observability_manager.trace_file
+        if "--trace" in sys.argv:
+            idx = sys.argv.index("--trace")
+            trace_path = sys.argv[idx + 1]
+            
+        session_id = f"dream_{int(time.time())}"
+        if "--session-id" in sys.argv:
+            idx = sys.argv.index("--session-id")
+            session_id = sys.argv[idx + 1]
+            
+        from src.dreaming.dream_reader import dream_reader
+        from src.dreaming.dream_distiller import dream_distiller
+        from src.dreaming.dream_store import dream_store
+        
+        print(f"Loading trace file: {trace_path}")
+        try:
+            bundle = dream_reader.load_trace(trace_path)
+            if not bundle.get("runs"):
+                print("Dream command: Bundle contains no valid trace events. Exiting.")
+                sys.exit(1)
+                
+            result = dream_distiller.distill(bundle)
+            filepath = dream_store.save_dream_session(session_id, result)
+            print(f"Dreaming completed successfully. Artifact saved to: {filepath}")
+        except Exception as e:
+            print(f"Dream command failed: {e}")
+            sys.exit(1)
+            
+    elif cmd == "dream-promote":
+        insight_id = None
+        if "--id" in sys.argv:
+            idx = sys.argv.index("--id")
+            insight_id = sys.argv[idx + 1]
+            
+        if not insight_id:
+            print("Usage: python run.py dream-promote --id <insight_id>")
+            sys.exit(1)
+            
+        from src.memory.memory_engine import memory_engine
+        
+        all_dreams = memory_engine.get_all_memories(namespace="dream")
+        target_dream = None
+        for dr in all_dreams:
+            if dr["id"] == insight_id:
+                target_dream = dr
+                break
+                
+        if not target_dream:
+            print(f"Dream insight with ID '{insight_id}' not found.")
+            sys.exit(1)
+            
+        content = target_dream.get("content", "")
+        if content.startswith("[SUMMARY]"):
+            print("Cannot promote a session summary memory. Must be an individual insight.")
+            sys.exit(1)
+            
+        meta = target_dream.get("metadata", {}) or {}
+        meta["source_dream_id"] = insight_id
+        
+        new_id = memory_engine.add_insight(
+            task_id="DREAM_PROMOTED",
+            content=content,
+            status="success",
+            importance=target_dream.get("importance", 5.0),
+            metadata=meta
+        )
+        if new_id:
+            print(f"Successfully promoted dream insight '{insight_id}' to insight namespace as '{new_id}'")
+        else:
+            print(f"Failed to promote dream insight '{insight_id}'")
+            
     else:
         print(f"Lệnh không hợp lệ: {cmd}")
         print_help()
