@@ -7,6 +7,7 @@ class DreamInsight(BaseModel):
     scope: str = Field(..., description="Phạm vi áp dụng: 'global', 'session', hoặc 'task'")
     domain: str = Field(..., description="Domain chủ đề (ví dụ: regex, smtp, math...)")
     confidence: float = Field(..., description="Độ tự tin/tin cậy từ 0.0 đến 1.0")
+    vertical: str = Field(default="generic", description="Business vertical chủ đề (sales, marketing, finance, generic)")
 
 class DreamResult(BaseModel):
     session_summary: str = Field(..., description="Tóm tắt kết quả của phiên làm việc viết bằng tiếng Việt")

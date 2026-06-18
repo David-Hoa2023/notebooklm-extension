@@ -51,5 +51,13 @@ dreaming:
   min_confidence: 0.6
   load_dreams_on_frozen: false
 
+# Business Verticals
+verticals:
+  enabled: true
+  allowed: ["sales", "marketing", "finance", "generic"]
+  retrieval_mode: "strict" # options: strict, prefer, off
+  explore_target_verticals: true
+
+
 
 

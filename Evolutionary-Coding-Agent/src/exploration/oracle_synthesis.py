@@ -189,6 +189,7 @@ class OracleSynthesizer:
             "is_self_proposed": True,
             "target_skills": proposed.target_skills,
             "rationale": proposed.rationale,
+            "vertical": getattr(proposed, "vertical_target", "generic"),
         }
 
 

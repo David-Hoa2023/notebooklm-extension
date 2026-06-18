@@ -90,6 +90,11 @@ class AgentPipeline:
                 domains.add(dom)
         return domains
 
+    def _infer_task_vertical(self, task: dict) -> str:
+        from src.taxonomy.verticals import infer_vertical_primary
+        desc = task.get("description", "")
+        return task.get("vertical") or infer_vertical_primary(desc)
+
     def execute_task(self, task: dict, probe_context: str = "", seed: int | None = None) -> dict:
         """
         Executes a single curriculum task.
@@ -159,7 +164,7 @@ class AgentPipeline:
                 retrieved_skills = memory_engine.retrieve_memories(
                     namespace="skill",
                     query_text=description,
-                    limit=5,
+                    limit=15,
                     filters={"status": "success"} # ensure it passed
                 )
                 # Keep only skills that are marked retrievable
@@ -176,6 +181,35 @@ class AgentPipeline:
                     else:
                         print(f"[{task_id}] Excluded skill '{sk_meta.get('name')}' due to domain mismatch (skill domain '{sk_dom}' not in task domains {task_domains})")
                 retrieved_skills = filtered_skills
+
+                # Filter and rank by business vertical compatibility (BIZ_PIPE_001)
+                if config_instance.get("verticals.enabled", True):
+                    task_vertical = self._infer_task_vertical(task)
+                    retrieval_mode = config_instance.get("verticals.retrieval_mode", "strict")
+                    
+                    if retrieval_mode == "strict":
+                        # strict: drop skills where skill.vertical not in {task_vertical, generic}
+                        filtered_by_vertical = []
+                        for sk in retrieved_skills:
+                            sk_meta = sk.get("metadata", {})
+                            sk_vert = sk_meta.get("vertical", "generic").lower().strip()
+                            if sk_vert in {task_vertical, "generic"}:
+                                filtered_by_vertical.append(sk)
+                            else:
+                                print(f"[{task_id}] Excluded skill '{sk_meta.get('name')}' due to strict vertical mismatch (skill vertical '{sk_vert}' mismatch with task vertical '{task_vertical}')")
+                        retrieved_skills = filtered_by_vertical
+                    elif retrieval_mode == "prefer":
+                        # prefer: rank generic + matching vertical higher, do not drop non-matching
+                        def rank_key(sk):
+                            sk_meta = sk.get("metadata", {})
+                            sk_vert = sk_meta.get("vertical", "generic").lower().strip()
+                            if sk_vert == task_vertical:
+                                return 0
+                            elif sk_vert == "generic":
+                                return 1
+                            else:
+                                return 2
+                        retrieved_skills.sort(key=rank_key)
 
                 # Exclude regex/email-poison skills when task_id starts with NEG_ or description mentions smtplib
                 if task_id.startswith("NEG_") or "smtplib" in description:
@@ -389,19 +423,41 @@ class AgentPipeline:
             used_skills = skill_composition_instance.trace_used_skills(code_solution, retrieved_skills)
             val_res["used_skills"] = used_skills
             
+            from src.taxonomy.verticals import infer_vertical_primary
+            task_vertical = task.get("vertical") or infer_vertical_primary(description)
+            
             if not self.frozen_memory:
                 print(f"[{task_id}] Solution passed! Extracting reusable skills...")
                 skills_extracted = skill_manager.extract_and_register_skills(
                     task_id=task_id,
                     task_description=description,
-                    code=code_solution
+                    code=code_solution,
+                    vertical_hint=task_vertical
                 )
+                
+                # Fetch verticals of the newly extracted skills for logging trace
+                extracted_skills_verticals = []
+                if skills_extracted:
+                    all_skills = memory_engine.get_all_memories("skill")
+                    skill_id_set = set(skills_extracted)
+                    for sk in all_skills:
+                        if sk["id"] in skill_id_set:
+                            extracted_skills_verticals.append(sk.get("metadata", {}).get("vertical", "generic"))
+            else:
+                extracted_skills_verticals = []
+                
+        else:
+            from src.taxonomy.verticals import infer_vertical_primary
+            task_vertical = task.get("vertical") or infer_vertical_primary(description)
+            extracted_skills_verticals = []
                 
         # Include metadata in response
         val_res.update({
             "task_id": task_id,
             "code": code_solution,
             "skills_extracted": skills_extracted,
+            "task_vertical": task_vertical,
+            "extracted_skills_verticals": extracted_skills_verticals,
             "insights_retrieved": [ins["id"] for ins in retrieved_insights],
             "skills_retrieved": [sk["id"] for sk in retrieved_skills],
             "dreams_retrieved": dreams_retrieved,

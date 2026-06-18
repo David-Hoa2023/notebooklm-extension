@@ -13,9 +13,10 @@ TASK_PROPOSAL_SCHEMA = {
         "description": {"type": "STRING"},
         "difficulty": {"type": "STRING"},
         "target_skills": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "vertical_target": {"type": "STRING"},
         "rationale": {"type": "STRING"},
     },
-    "required": ["title", "description", "difficulty", "target_skills", "rationale"],
+    "required": ["title", "description", "difficulty", "target_skills", "rationale", "vertical_target"],
 }
 
 
@@ -56,10 +57,12 @@ class CurriculumProposer:
         skill_summaries: list[str],
         gap_targets: list[str] | None = None,
         avoid_topics: list[str] | None = None,
+        vertical_targets: list[str] | None = None,
     ) -> ProposedTask:
         difficulty = calibrate_difficulty(success_rate)
         gap_targets = gap_targets or []
         avoid_topics = avoid_topics or []
+        vertical_targets = vertical_targets or []
 
         system_instruction = (
             "You are an autonomous curriculum designer for a Python coding agent. "
@@ -78,6 +81,16 @@ class CurriculumProposer:
                 "that performs self-check assertion validations."
             )
 
+        verticals_instruction = ""
+        if vertical_targets:
+            verticals_instruction = (
+                f"- CRITICAL: Close the following business vertical gap: {', '.join(vertical_targets)}. "
+                "Design this practice task around the theme of one of these business verticals (sales, marketing, or finance). "
+                "The proposed task MUST be set in this business context (e.g., aggregating order prices for 'sales', "
+                "filtering UTM campaigns for 'marketing', or ledger auditing/tax math for 'finance') but still using Python stdlib only. "
+                "Populate the 'vertical_target' field with the targeted vertical (one of: sales, marketing, finance, generic)."
+            )
+
         prompt = f"""
 Recent agent success rate: {success_rate:.0%}
 Target difficulty (ZPD): {difficulty}
@@ -90,6 +103,7 @@ Design a novel Python coding task with:
 - Testable behavior (no external APIs, no files unless trivial)
 - Difficulty aligned to {difficulty}
 {testing_instruction}
+{verticals_instruction}
 """
 
         res_str = self.llm.generate(
@@ -111,6 +125,7 @@ Design a novel Python coding task with:
             rationale=data.get("rationale", ""),
             source="curriculum_proposer",
             skill_gap_targets=gap_targets,
+            vertical_target=data.get("vertical_target", "generic"),
         )
 
 

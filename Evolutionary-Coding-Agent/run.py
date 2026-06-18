@@ -33,6 +33,7 @@ Các lệnh khả dụng:
   run-all           Chạy tuần tự toàn bộ quy trình trên và sinh báo cáo
   dream             Chạy offline Dreaming để đúc rút bài học từ trace log
   dream-promote     Thăng chức (promote) một bài học từ dream sang insight namespace
+  backfill-verticals Gán nhãn business vertical cho các skill cũ (--dry-run để chạy thử)
 """)
 
 
@@ -227,6 +228,13 @@ def main():
         else:
             print(f"Failed to promote dream insight '{insight_id}'")
             
+    elif cmd == "backfill-verticals":
+        dry_run = "--dry-run" in sys.argv
+        from src.skill.skill_manager import skill_manager
+        print(f"Bắt đầu backfill business verticals cho các skill cũ (dry_run={dry_run})...")
+        num_changed, num_total = skill_manager.backfill_verticals(dry_run=dry_run)
+        print(f"Backfill hoàn tất: đã cập nhật/đề xuất {num_changed}/{num_total} skills.")
+        
     else:
         print(f"Lệnh không hợp lệ: {cmd}")
         print_help()

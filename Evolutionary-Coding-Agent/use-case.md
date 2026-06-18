@@ -43,7 +43,7 @@ Most coding agents treat every task as a fresh start. They cannot **learn reusab
 ```powershell
 cd D:\AI_project\Evolutionary-Coding-Agent
 .venv\Scripts\Activate.ps1
-$env:GEMINI_API_KEY = "your-key"
+$env:DEEPSEEK_API_KEY = "your-key"
 .venv\Scripts\python run.py init-curriculum
 .venv\Scripts\python run.py run-all
 # Or smoke test: python run.py run-all --seeds 42,43
@@ -126,12 +126,13 @@ Look for: per-task score chart (B / F / S), hypothesis cards (H1, H2), token cos
 | **§1 (this)** | **Quantitative** — PG/SG/GG, p-values, multi-seed `run-all` |
 | **§2** | **Durable** — skills saved, regression passed after explore |
 | **§3** | **Safe** — oracle gates before self-proposed tasks run |
+| **§8** | **Distilled** — offline trace → scoped dreams → safe injection |
 
 Explore alone does not replace `run-all` for hypothesis testing; together they show the agent can learn safely **and** be measured rigorously.
 
 **Dr. Lin's takeaway for §1**
 
-> A single impressive trace is an **anecdote**. Six seeds, three passes, frozen memory, paired t-tests, and a published dashboard are **evidence infrastructure**. The latest Jun 16 `run-all` says memory **helps while learning** (PG +0.125, strongest on SUB_002) but **does not yet prove** overall improvement (H1/H2 not significant; SG slightly negative). NEG_001 shows memory can **hurt** when old skills interfere. That mixed picture is exactly the kind of answer a researcher can work with — not vibes, numbers.
+> A single impressive trace is an **anecdote**. Six seeds, three passes, frozen memory, paired t-tests, and a published dashboard are **evidence infrastructure**. The latest DeepSeek `run-all` (Jun 17) shows a **null effect at the 9.0 ceiling** — PG/SG/GG all **0.000**, H1/H2 not significant — because baseline already solves every training and held-out task perfectly. That is an honest answer, not a failure: it proves **stability** at saturation. Historical Gemini-era runs (Jun 16) showed PG +0.125 with mixed SG; NEG_001 is now fixed at **9.0** on all 6 seeds. For measurable PG > 0, Dr. Lin needs a harder curriculum or stricter judge — see **§8** for offline dreaming as a complementary memory layer.
 
 ---
 
@@ -233,7 +234,7 @@ start logs\dashboard.html
 ```powershell
 cd D:\AI_project\Evolutionary-Coding-Agent
 .venv\Scripts\Activate.ps1
-$env:GEMINI_API_KEY = "your-key"
+$env:DEEPSEEK_API_KEY = "your-key"
 # In config.yaml: exploration.epsilon: 1.0, min_epsilon: 1.0
 .venv\Scripts\python run.py init-curriculum
 .venv\Scripts\python run.py explore --seeds 42
@@ -458,13 +459,62 @@ The agent did not invent four random puzzles. It built a **mini practice set** i
 
 ---
 
+### 8. “Raw trace logs are too noisy to reuse across sessions”
+
+**Pain point:** After a long `run-all`, `logs/trace.jsonl` holds thousands of lines — retries, full code dumps, and judge prose. Feeding that raw into the next session wastes tokens and risks cross-domain leakage (e.g. SMTP mock rules appearing on regex tasks).
+
+**User story:** As a researcher, I want to distill offline session traces into compact, scoped lessons and inject only the relevant ones on the next run — with confidence gates and domain filters — so that memory improves without poisoning unrelated tasks.
+
+**How the project addresses it:**
+- **Offline Dreaming pipeline** (`src/dreaming/`): compress trace → LLM distill → store in `dream` namespace + JSON mirror
+- **Safety gates**: confidence ≥ `dreaming.min_confidence` (0.6), valid `evidence_task_ids`, scope/domain filtering in `dream_loader.py`
+- **Self-healing DB**: empty SQLite `dream` namespace repopulates from `data/memory/dreams/*.json` on next retrieve
+- **Dashboard Phase 7 card**: dream session count, compression ratio, dreams loaded E2E
+- **A/B protocol** documented in `doc/dreaming-ab-protocol.md`; results in [memory.md](memory.md) and [walkthrough.md](walkthrough.md) §4.1
+
+#### Dr. Lin scenario: offline dreaming A/B (seeds 42, 43)
+
+**Scenario:** After §1 shows null PG at ceiling, Dr. Lin asks: *can distilled offline lessons load safely without regression?* She runs the protocol in `doc/dreaming-ab-protocol.md`:
+
+| Phase | Config | Action |
+|-------|--------|--------|
+| Baseline | `dreaming.enabled: false` | `run-all --seeds 42,43` |
+| Distill | — | `python run.py dream --trace logs/trace.jsonl --session-id run_all_baseline_seeds42_43` |
+| Active | `dreaming.enabled: true` | Clear DB, re-run `run-all --seeds 42,43` |
+
+**A/B results (Jun 18, persisted trace)**
+
+| Metric | Baseline (off) | Dreaming on | Notes |
+|--------|----------------|-------------|-------|
+| Training task score | 9.0 | 9.0 | Ceiling saturation — no score lift expected |
+| Held-out score | 9.0 | 9.0 | Generalization stable |
+| NEG_001 | 9.0 | 9.0 | No SMTP regression; domain filters hold |
+| PG / SG | 0.000 | 0.000 | Null effect at ceiling |
+| Dreams loaded | 0 | **18** IDs across **6 runs** | Wiring verified (`COMPLEX_001`, naive stream) |
+
+*Pain point addressed:* Dreaming **does not claim** to break the 9.0 ceiling yet. It proves **traceability** (injection logged in `metadata.dreams_retrieved`), **self-healing** after DB wipe, and **no cross-domain pollution** — the reliability bar for a production memory layer.
+
+**Where to verify**
+
+```powershell
+$env:PYTHONPATH = "."
+.venv\Scripts\python scratch/verify_dream_session.py
+start logs\dashboard.html   # Phase 7: Offline Dreaming card
+```
+
+**Dr. Lin's takeaway for §8**
+
+> Offline dreaming turns a noisy audit log into a **curated lesson pack**. At today's curriculum difficulty, the win is **safe wiring and anti-leakage**, not higher scores. When baseline drops below 9.0 on harder tasks, this layer is ready to inject distilled wisdom without replaying entire traces.
+
+---
+
 ## Prerequisites
 
 Before any workflow:
 
 1. **Python 3.10+** with a virtual environment
 2. **Docker** running locally (`refuse_fallback: true` — no host fallback)
-3. **`GEMINI_API_KEY`** set in your environment
+3. **`DEEPSEEK_API_KEY`** set in your environment
 4. Dependencies installed:
 
 ```powershell
@@ -485,10 +535,10 @@ python -m venv .venv
 
 | Step | Action | Expected result |
 |------|--------|-----------------|
-| 1 | Set `GEMINI_API_KEY` in PowerShell: `$env:GEMINI_API_KEY = "your-key"` | Key available to `src/llm.py` |
+| 1 | Set `DEEPSEEK_API_KEY` in PowerShell: `$env:DEEPSEEK_API_KEY = "your-key"` | Key available to `src/llm.py` |
 | 2 | Confirm Docker: `docker info` | Daemon running, no errors |
 | 3 | Activate venv: `.venv\Scripts\Activate.ps1` | Prompt shows `(.venv)` |
-| 4 | Run unit tests: `.venv\Scripts\python -m pytest -q` | **26 passed** |
+| 4 | Run unit tests: `.venv\Scripts\python -m pytest -q` | **35 passed** |
 | 5 | Init curriculum: `.venv\Scripts\python run.py init-curriculum` | `data/curriculum/tasks.json` created |
 
 ---
@@ -584,7 +634,7 @@ Add `--seeds 42,43,44,45,46,47` (or a subset) to any command except `init-curric
 | 2 | Copy snapshot: `Copy-Item data\memory_snapshots\memory_repaired_backup.db data\memory\memory.db -Force` | DB restored |
 | 3 | Verify AST validity (optional script or manual spot-check) | All skills parse as Python |
 | 4 | Run `python run.py report` | Coverage reflects restored skills |
-| 5 | Run targeted pytest | **26/26 passed** |
+| 5 | Run targeted pytest | **35/35 passed** |
 
 Ensure `lifecycle.py` namespace-aware skill merge is in place before resuming exploration.
 
@@ -597,14 +647,34 @@ Ensure `lifecycle.py` namespace-aware skill merge is in place before resuming ex
 | Step | Action | Expected result |
 |------|--------|-----------------|
 | 1 | Toggle dreaming in `config.yaml` if needed: `dreaming.enabled: true` | Loader activated for subsequent runs |
-| 2 | Distill raw traces manually: `python run.py dream --trace logs/trace.jsonl` | Dream file written to `data/memory/dreams/<session_id>.json` |
+| 2 | Distill raw traces manually: `python run.py dream --trace logs/trace.jsonl --session-id <name>` | Dream file written to `data/memory/dreams/<session_id>.json` and `latest.json` |
 | 3 | Promote a dream to permanent `insight` namespace: `python run.py dream-promote --id drm_xxx` | Copied to insight database with `source_dream_id` |
-| 4 | Run verify checklist: `python scratch/verify_dream_session.py` | Checklist prints PASS/FAIL for all modules |
+| 4 | Run verify checklist: `python scratch/verify_dream_session.py` | All five checklist items `[PASS]` |
+| 5 | Regenerate dashboard: `python run.py report` | Phase 7 card shows sessions, compression ratio, dreams loaded |
 
 **Safety features:**
 - **Confidence gate**: Distilled insights with confidence < `dreaming.min_confidence` (default 0.6) are rejected.
 - **Evidence verification**: Insights lacking valid `evidence_task_ids` from the trace bundle are discarded.
 - **Context boundary**: Task-scoped dreams are only loaded if the current task description matches the original task.
+- **Self-healing repopulation**: If SQLite `dream` namespace is empty, `dream_store.retrieve_dreams()` reloads from filesystem JSON mirrors.
+
+**A/B evaluation (optional):** Follow `doc/dreaming-ab-protocol.md` — baseline off → distill → clear DB → dreaming on → compare PG/SG and `dreams_retrieved` counts in trace. See **§8** for recorded results (seeds 42, 43).
+
+---
+
+### Guide I — Business Verticals (Department-Shaped Dual-Tagging)
+
+**Goal:** Enable department-shaped curriculum, explore gap targeting, skill extraction provenance, retrieval filtering, and dashboard coverage via a dual-tagging metadata system (technical `domain` + business `vertical`).
+
+| Step | Action | Expected result |
+|------|--------|-----------------|
+| 1 | Set up config in `config.yaml`: `verticals.enabled: true` | Enable business verticals functionality |
+| 2 | Assign business vertical to task dict (optional field `vertical: sales \| marketing \| finance \| generic`) | Task curriculum now carries explicit business vertical metadata |
+| 3 | Backfill existing skills: `python run.py backfill-verticals [--dry-run]` | All skills in the database are tagged with business verticals |
+| 4 | Run verify checklist: `python scratch/verify_business_verticals.py` | All six verification checks print `[PASS]` |
+| 5 | Configure retrieval mode: `verticals.retrieval_mode: strict` or `prefer` | Strict filters out mismatching verticals; Prefer ranks matching vertical higher |
+| 6 | Enable target gap exploration: `verticals.explore_target_verticals: true` | Proposer targets business vertical gaps and suggests department-themed tasks |
+| 7 | Update dashboard HTML: `python run.py report` | Dashboard panel renders vertical coverage statistics |
 
 ---
 
@@ -631,6 +701,11 @@ flowchart TD
     M --> E
     M --> F
     M --> G
+
+    N[dream CLI] --> O[distill trace]
+    O --> P[data/memory/dreams]
+    P --> C
+    F --> N
 ```
 
 ---
@@ -641,9 +716,11 @@ flowchart TD
 |----------|----------|-----|
 | Run trace | `logs/trace.jsonl` | Auditing, metrics, debugging |
 | Dashboard | `logs/dashboard.html` | PG/SG/GG, coverage, H1/H2, errors |
-| Memory DB | `data/memory/memory.db` | Skills, insights, interactions |
+| Memory DB | `data/memory/memory.db` | Skills, insights, interactions, dreams |
+| Dream sessions | `data/memory/dreams/*.json`, `latest.json` | Offline distilled lessons (filesystem mirror) |
 | DB backup | `data/memory_snapshots/memory_repaired_backup.db` | Disaster recovery |
 | Curriculum | `data/curriculum/tasks.json` | Fixed training and held-out tasks |
+| Dreaming protocol | `doc/dreaming-ab-protocol.md` | A/B evaluation procedure |
 
 ---
 
@@ -651,7 +728,9 @@ flowchart TD
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `GEMINI_API_KEY is not set` | Missing env var | Export key before running |
+| `DEEPSEEK_API_KEY is not set` | Missing env var | Export key before running |
+| Dream checklist FAIL | No distill run yet or dreaming off | Run `python run.py dream --trace logs/trace.jsonl`; set `dreaming.enabled: true` |
+| Dreams not injected | Domain/scope filter excluded insights | Check `metadata.dreams_retrieved` in trace; verify domain keywords match task |
 | Docker connection error | Daemon not running | Start Docker Desktop |
 | `ModuleNotFoundError: pytest` in explore | Oracle allowed bad test code | Should be blocked; check `oracle_synthesis.py` and re-run explore |
 | Skill-backed coverage drops | Corrupted skill merge or invalid code in DB | Restore snapshot; verify namespace-aware dedup |
@@ -664,6 +743,7 @@ flowchart TD
 ## Related documentation
 
 - [memory.md](memory.md) — Session logs, current state snapshot, wiring reference
-- [walkthrough.md](walkthrough.md) — Phase 5/6 implementation summary (Vietnamese)
+- [walkthrough.md](walkthrough.md) — Phase 5–7 implementation summary (Vietnamese), including A/B dreaming results §4.1
+- [doc/dreaming-ab-protocol.md](doc/dreaming-ab-protocol.md) — Offline dreaming A/B evaluation protocol
 - [lesson.md](lesson.md) — Issue → fix → lesson history
 - `config.yaml` — Model, sandbox, exploration, memory, and budget settings

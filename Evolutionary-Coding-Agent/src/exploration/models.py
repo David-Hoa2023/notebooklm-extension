@@ -11,6 +11,7 @@ class ProposedTask(BaseModel):
     source: str = "curriculum_proposer"
     novelty_score: float = 0.0
     skill_gap_targets: list[str] = Field(default_factory=list)
+    vertical_target: str = "generic"
 
 
 class ProbeAction(BaseModel):

@@ -76,6 +76,9 @@ class SkillGapAnalyzer:
         skill_backed_gaps = [cap for cap in CAPABILITY_TAXONOMY if cap not in skill_backed_covered]
         skill_backed_coverage_rate = 1.0 - (len(skill_backed_gaps) / len(CAPABILITY_TAXONOMY))
 
+        from src.exploration.vertical_gap_analyzer import vertical_gap_analyzer
+        vertical_report = vertical_gap_analyzer.analyze()
+
         return {
             "covered_capabilities": sorted(covered),
             "gap_capabilities": gaps,
@@ -84,6 +87,10 @@ class SkillGapAnalyzer:
             "skill_backed_covered": sorted(skill_backed_covered),
             "skill_backed_gap_capabilities": skill_backed_gaps,
             "skill_backed_coverage_rate": skill_backed_coverage_rate,
+            "verticals_allowed": vertical_report.get("verticals_allowed", []),
+            "verticals_covered": vertical_report.get("verticals_covered", []),
+            "vertical_gaps": vertical_report.get("vertical_gaps", []),
+            "vertical_skill_backed_coverage_rate": vertical_report.get("vertical_skill_backed_coverage_rate", 0.0),
         }
 
     def top_gaps(self, limit: int = 3) -> list[str]:

@@ -20,12 +20,13 @@ SKILL_LIST_SCHEMA = {
                     "code": {"type": "STRING"},
                     "docstring": {"type": "STRING"},
                     "domain": {"type": "STRING"},
+                    "vertical": {"type": "STRING"},
                     "dependencies": {
                         "type": "ARRAY",
                         "items": {"type": "STRING"}
                     }
                 },
-                "required": ["name", "code", "docstring", "dependencies", "domain"]
+                "required": ["name", "code", "docstring", "dependencies", "domain", "vertical"]
             }
         }
     },
@@ -118,7 +119,7 @@ class SkillManager:
     def __init__(self):
         self.llm = llm_client
 
-    def extract_and_register_skills(self, task_id: str, task_description: str, code: str) -> list[str]:
+    def extract_and_register_skills(self, task_id: str, task_description: str, code: str, vertical_hint: str = None) -> list[str]:
         """
         Takes successfully verified code, extracts modular helper functions/skills,
         and runs tests on them before inserting them into the 'skill' memory.
@@ -128,6 +129,13 @@ class SkillManager:
             "Nhiệm vụ của bạn là phân tách các đoạn code lớn thành các hàm (function) nhỏ hơn, "
             "độc lập, có tính tái sử dụng cao (utility helper). Trả về kết quả dạng JSON."
         )
+        
+        allowed_verticals = config_instance.get("verticals.allowed", ["sales", "marketing", "finance", "generic"])
+        allowed_verticals_str = ", ".join(allowed_verticals)
+        
+        hint_clause = ""
+        if vertical_hint:
+            hint_clause = f"\nLưu ý bổ sung: Nhiệm vụ này thuộc business vertical: '{vertical_hint}'. Hãy ưu tiên gán giá trị này nếu hàm helper thuộc lĩnh vực kinh doanh này."
         
         prompt = f"""
 Nhiệm vụ lập trình gốc:
@@ -144,7 +152,8 @@ Mỗi hàm helper trích xuất cần phải:
 2. Có kiểu dữ liệu đầu vào, đầu ra rõ ràng (Type Hints).
 3. Có docstring mô tả chi tiết chức năng, tham số và giá trị trả về bằng tiếng Anh/Việt.
 4. KHÔNG bao gồm code test hoặc code chạy thử ở mức toàn cục.
-5. Xác định domain (lĩnh vực) phù hợp cho hàm này (chọn một trong: regex, smtp, json, math, datetime, string_parsing, file_io, algorithms, data_structures, error_handling, testing, hoặc generic).
+5. Xác định domain (lĩnh vực kỹ thuật) phù hợp cho hàm này (chọn một trong: regex, smtp, json, math, datetime, string_parsing, file_io, algorithms, data_structures, error_handling, testing, hoặc generic).
+6. Xác định business vertical (lĩnh vực kinh doanh) phù hợp cho hàm này (chọn một trong các giá trị cấu hình sau: {allowed_verticals_str}). Nếu không khớp với vertical nào hoặc thuộc về kỹ thuật thuần túy, chọn 'generic'. {hint_clause}
    Chú ý: Khi định nghĩa kiểu dữ liệu (Type Hints), hãy sử dụng kiểu chữ thường (ví dụ: list, dict) hoặc import đầy đủ từ thư viện `typing` (ví dụ: List, Dict, Optional) nếu cần thiết.
 """
         extracted_ids = []
@@ -164,10 +173,21 @@ Mỗi hàm helper trích xuất cần phải:
                 code_content = sk.get("code")
                 docstring = sk.get("docstring", "")
                 domain = sk.get("domain", "generic").lower().strip()
+                vertical = sk.get("vertical", "generic").lower().strip()
                 deps = sk.get("dependencies", [])
                 
                 if not name or not code_content:
                     continue
+                
+                # LLM cannot assign vertical outside allowed list — clamp to generic with warning log.
+                from src.taxonomy.verticals import get_allowed_verticals
+                allowed_list = get_allowed_verticals()
+                if vertical not in allowed_list:
+                    import logging
+                    msg = f"Warning: Extracted vertical '{vertical}' for skill '{name}' is not in allowed list {allowed_list}. Clamping to 'generic'."
+                    print(msg)
+                    logging.warning(msg)
+                    vertical = "generic"
                 
                 # 1. Clean code content formatting: unescape \n
                 code_content = code_content.replace('\\n', '\n')
@@ -189,7 +209,7 @@ Mỗi hàm helper trích xuất cần phải:
                     print(f"Skipping skill candidate '{name}' after auto-prepend imports: {parse_err}")
                     continue
                     
-                print(f"Extracted Skill candidate: '{name}' (domain: '{domain}') from task '{task_id}'. Running verification...")
+                print(f"Extracted Skill candidate: '{name}' (domain: '{domain}', vertical: '{vertical}') from task '{task_id}'. Running verification...")
                 
                 # Step 2: Test & Verify Skill (SKILL_002)
                 # We call skill_tester to auto-generate tests and verify inside sandbox
@@ -212,11 +232,12 @@ Mỗi hàm helper trích xuất cần phải:
                     
                 combined_deps = list(set(deps + ast_deps))
                 
-                # Register in database with version, domain tag, and source task provenance
+                # Register in database with version, domain tag, vertical tag, and source task provenance
                 metadata = {
                     "name": name,
                     "docstring": docstring,
                     "domain": domain,
+                    "vertical": vertical,
                     "dependencies": combined_deps,
                     "retrievable": is_verified, # Only retrieve if verified
                     "generated_tests": generated_tests,
@@ -244,6 +265,58 @@ Mỗi hàm helper trích xuất cần phải:
         except Exception as e:
             print(f"Error extracting skills: {e}")
             return []
+
+    def backfill_verticals(self, dry_run: bool = False) -> tuple[int, int]:
+        """
+        Backfills vertical tag for existing skills in the database.
+        Returns (num_changed, num_total).
+        """
+        from src.taxonomy.verticals import infer_vertical_primary
+        from src.infra.curriculum import curriculum_manager
+        
+        all_skills = memory_engine.get_all_memories(namespace="skill")
+        num_changed = 0
+        num_total = len(all_skills)
+        
+        for sk in all_skills:
+            metadata = sk.get("metadata", {}) or {}
+            
+            if "vertical" in metadata and metadata["vertical"]:
+                continue
+                
+            skill_id = sk["id"]
+            name = metadata.get("name", "")
+            docstring = metadata.get("docstring", "")
+            content = sk.get("content", "")
+            source_tasks = metadata.get("source_tasks", [])
+            
+            inferred_vertical = None
+            if source_tasks:
+                for task_id in source_tasks:
+                    task = curriculum_manager.get_task(task_id)
+                    if task and task.get("vertical"):
+                        inferred_vertical = task["vertical"]
+                        break
+            
+            if not inferred_vertical:
+                combined_text = f"{name} {docstring} {content}"
+                inferred_vertical = infer_vertical_primary(combined_text)
+                
+            if not inferred_vertical:
+                inferred_vertical = "generic"
+                
+            print(f"[Backfill] Proposed: Skill '{name}' ({skill_id}) -> vertical={inferred_vertical}")
+            num_changed += 1
+            
+            if not dry_run:
+                metadata["vertical"] = inferred_vertical
+                memory_engine.db.conn.execute(
+                    "UPDATE memories SET metadata = ? WHERE id = ?",
+                    (json.dumps(metadata), skill_id)
+                )
+                memory_engine.db.conn.commit()
+                
+        return num_changed, num_total
 
 # Global skill manager instance
 skill_manager = SkillManager()

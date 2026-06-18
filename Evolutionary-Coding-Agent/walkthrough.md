@@ -80,4 +80,30 @@ $env:PYTHONPATH="."; .venv\Scripts\python scratch/verify_dream_session.py
 ```
 
 ---
+
+## 5. Business Verticals (Lĩnh Vực Kinh Doanh)
+
+Chúng tôi đã thiết kế và triển khai phân hệ **Business Verticals** nhằm bổ sung hệ thống dán nhãn kép (dual-tagging: technical `domain` + business `vertical`) trên toàn bộ vòng đời tác vụ, chiết xuất skill, lưu trữ, truy xuất, dreaming và phân tích độ bao phủ:
+
+### Các thành phần chính và cơ chế hoạt động
+- **Phân loại & Định nghĩa (Taxonomy)**: Khai báo danh sách các vertical hợp lệ (`sales`, `marketing`, `finance`, `generic`) và cài đặt cơ chế suy diễn tự động chủ đề dựa trên từ khóa trong mô tả tác vụ (ví dụ: `revenue`, `invoice`, `discount` -> `sales` hoặc `marketing`).
+- **Chiết Xuất & Lưu Trữ Kép (Extraction & Storage)**: Khi tổng hợp skill mới, hệ thống kết hợp LLM để dán nhãn đồng thời cả domain kỹ thuật (ví dụ `json`) lẫn business vertical (ví dụ `sales`). Skill được lưu trữ độc lập để tránh va chạm/gộp nhầm giữa các lĩnh vực kinh doanh khác nhau.
+- **Truy Xuất Tối Ưu (Retrieval Modes)**:
+  - `strict`: Chỉ truy xuất các skill thuộc đúng vertical của tác vụ hoặc `generic`. Ngăn chặn hoàn toàn việc rò rỉ skill chéo phòng ban (ví dụ bài tập tài chính không lấy skill bán hàng).
+  - `prefer`: Truy xuất tất cả skill liên quan nhưng ưu tiên xếp các skill có cùng vertical lên đầu danh sách để tối ưu hóa thứ tự chèn ngữ cảnh.
+- **Độ Bao Phủ & Đề Xuất (Gap Analysis & Propose)**: Hệ thống phân tích tỷ lệ bao phủ của các business vertical. Nếu tính năng `explore_target_verticals` được kích hoạt, proposer sẽ tự động thiết kế các tác vụ giả lập nhắm thẳng vào các khoảng trống (gaps) của vertical chưa có skill hỗ trợ.
+- **Dashboard Observability**: Thêm thẻ biểu đồ hiển thị trực quan số lượng skill và độ bao phủ của từng business vertical trên Dashboard HTML báo cáo.
+
+### Lệnh Xác minh và Backfill
+1. **Backfill dữ liệu cũ**: Cập nhật nhãn vertical cho các skill hiện có trong cơ sở dữ liệu:
+   ```powershell
+   $env:PYTHONPATH="."; .venv\Scripts\python run.py backfill-verticals
+   ```
+2. **Chạy kịch bản kiểm tra tự động**:
+   ```powershell
+   $env:PYTHONPATH="."; .venv\Scripts\python scratch/verify_business_verticals.py
+   ```
+   *Kết quả xác minh*: Toàn bộ 6/6 bài kiểm tra (cấu hình, nhiệm vụ mẫu, metadata skill, bộ phân tích gaps, dashboard và luồng strict retrieval) đều vượt qua thành công (`[PASS]`).
+
+---
 *Ghi chú: Toàn bộ dữ liệu chi tiết được lưu trữ dưới dạng trace log tại `logs/trace.jsonl` và giao diện Dashboard hiển thị tại `logs/dashboard.html`.*

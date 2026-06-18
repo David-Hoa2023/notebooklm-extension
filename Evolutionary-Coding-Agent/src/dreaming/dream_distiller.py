@@ -52,7 +52,7 @@ Please distill this session trace. Focus on:
 - Domain rules that should guide future runs.
 
 For each insight, list the evidence_task_ids (e.g., ["NEG_001"] or ["SUB_001", "SUB_003"]) that support it.
-Assign a domain (e.g. "smtp", "regex", "math") and scope ("global", "session", or "task").
+Assign a domain (e.g. "smtp", "regex", "math"), scope ("global", "session", or "task"), and vertical (one of the business verticals: "sales", "marketing", "finance", "generic"). If the lesson is purely technical or generic, assign "generic".
 """
         
         print("DreamDistiller: Distilling session runs via LLM...")

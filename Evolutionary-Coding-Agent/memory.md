@@ -9,18 +9,43 @@ Last updated: 2026-06-18. Living record of audits, Phase 5 hardening, Phase 6 ev
 | Item | Status |
 |------|--------|
 | Skill-backed coverage | **100%** (10/10 capabilities, zero gaps) |
-| Skills in DB | 35 total, **24 retrievable**, **35/35 AST-valid** |
-| Unit tests | **35/35 passed** (scratch excluded via `pytest.ini`, requires DEEPSEEK_API_KEY) |
+| Skills in DB | 12 total, **12 retrievable**, **12/12 AST-valid** |
+| Unit tests | **42/42 passed** (scratch excluded via `pytest.ini`, requires DEEPSEEK_API_KEY) |
 | Exploration policy | `epsilon: 0.35`, `min_epsilon: 0.1` |
 | LLM model | `deepseek-chat` (via DeepSeek API) |
 | Embedding model | `local-hashing` (local 768-dimensional hashing embeddings) |
 | DB backup | Clean rebuild with 768-dim embeddings |
-| Latest commit | `36e62a8` — Update walkthrough.md with A/B evaluation results table and analysis |
+| Latest commit | `e9968f8` — Implement and operationalize Business Verticals Tagging (sales, marketing, finance, generic) across curriculum, extraction, retrieval filtering, active explore proposer, and dashboard |
 | Working tree | Clean |
 
 **Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
 
 **Known caveat:** H2 dashboard label says "training tasks" but `observability.py` pairs all `first_pass` vs `second_pass` runs (includes `NEG_001`). Filter or relabel if strict training-only H2 is required.
+
+---
+
+## Session log (June 18, 2026 — afternoon — Business Verticals Implementation)
+
+### What was accomplished
+
+1. **Phase 0 - Phase 6 Business Verticals Completed**:
+   - Configured allowable business verticals (`sales`, `marketing`, `finance`, `generic`) and wired YAML parameters (`verticals.enabled`, `verticals.allowed`, `verticals.retrieval_mode`, `verticals.explore_target_verticals`).
+   - Implemented keyword-based vertical inference (`infer_vertical` and `infer_vertical_primary`) and task vertical hint propagation.
+   - Enhanced skill extraction, prompting, and database schema to support and validate `vertical` metadata tags alongside technical `domain`.
+   - Prevented cross-vertical deduplication collision during memory lifecycle merge.
+   - Built strict (exclude non-matching) and prefer (rank matching higher) vertical retrieval filtering modes in the pipeline execution flow.
+   - Configured active exploration proposer (`curriculum_proposer`) to target vertical gaps and propose department-themed tasks.
+   - Added CLI command `backfill-verticals` to perform idempotent backfill of existing skills (assigned `generic` to existing 12 skills).
+   - Added HTML vertical coverage panel and javascript populator card rendering to the dashboard report generator.
+   - Resolved integration test `prefer` mode assertion by adjusting test seeding within the hardcoded limit of 2 retrieval skills.
+   - Created `scratch/verify_business_verticals.py` to run automated verification checklist.
+   - Documented the feature, setup instructions, and walkthrough in `use-case.md` and `walkthrough.md`.
+
+### Verified metrics (DeepSeek 42-Test suite)
+
+- All **42/42** unit and integration tests passed cleanly.
+- Backfill CLI command (`python run.py backfill-verticals`) verified to update all 12 existing skills in the DB to `vertical=generic`.
+- Verification checklist script (`python scratch/verify_business_verticals.py`) verified to return all `[PASS]` checks.
 
 ---
 
@@ -296,13 +321,15 @@ To force 100% explore for verification: temporarily set `epsilon: 1.0` and `min_
 
 ## Test status
 
-- **35/35 passed** — `test_exploration` (14), `test_lifecycle` (4), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1), `test_dream_reader` (2), `test_dream_loader` (5), `test_dream_pipeline` (1), `test_dream_distiller` (1)
-- Notable new tests: `test_dream_distiller_safety_filters`, `test_dream_loader_scope_and_domain_filtering`
-- Run: `$env:DEEPSEEK_API_KEY="your-key"; $env:PYTHONPATH="."; .venv\Scripts\python -m pytest` (~22s)
+- **42/42 passed** — `test_exploration` (13), `test_lifecycle` (4), `test_retrieval` (2), `test_retrieval_rerank` (3), `test_sandbox` (3), `test_validation_integration` (1), `test_dream_reader` (2), `test_dream_loader` (5), `test_dream_pipeline` (1), `test_dream_distiller` (1), `test_verticals` (3), `test_skill_vertical_extraction` (2), `test_vertical_explore` (1), `test_vertical_retrieval` (1)
+- Notable new tests: `test_strict_and_prefer_vertical_retrieval`, `test_infer_vertical_primary`, `test_extract_and_register_skills_vertical`
+- Run: `$env:DEEPSEEK_API_KEY="your-key"; $env:PYTHONPATH="."; .venv\Scripts\python -m pytest` (~14s)
 
 ---
 
 ## Backlog snapshot
+
+**business-verticals.yaml:** 17 done, 0 todo (Business Verticals Tagging Epic completed)
 
 **dreaming.yaml:** 21 done, 0 todo (Offline Dreaming & Session Distillation MVP + Full Epic completed)
 

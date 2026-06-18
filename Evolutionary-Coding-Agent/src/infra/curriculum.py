@@ -201,6 +201,102 @@ def test_query_database_hidden():
                 pass
 test_query_database_hidden()
 """
+    },
+    {
+        "id": "SLS_REVENUE_001",
+        "title": "Sales Revenue Aggregator",
+        "difficulty": "basic",
+        "dependencies": [],
+        "is_held_out": False,
+        "vertical": "sales",
+        "description": "Viết hàm `aggregate_sales_revenue(orders: list[dict]) -> dict` nhận vào danh sách các đơn hàng (orders), mỗi đơn hàng có dạng `{'order_id': str, 'revenue': float, 'discount': float}`. Tính tổng doanh thu gốc (revenue), tổng giảm giá (discount), và doanh thu thực tế (revenue - discount). Trả về kết quả dưới dạng dict `{'total_revenue': float, 'total_discount': float, 'net_revenue': float}`. Tất cả giá trị làm tròn đến 2 chữ số thập phân.",
+        "test_code": """
+def test_aggregate_sales_revenue():
+    orders = [
+        {'order_id': 'O1', 'revenue': 100.0, 'discount': 10.0},
+        {'order_id': 'O2', 'revenue': 250.5, 'discount': 25.5},
+        {'order_id': 'O3', 'revenue': 50.0, 'discount': 0.0}
+    ]
+    res = aggregate_sales_revenue(orders)
+    assert res['total_revenue'] == 400.5
+    assert res['total_discount'] == 35.5
+    assert res['net_revenue'] == 365.0
+test_aggregate_sales_revenue()
+""",
+        "hidden_test_code": """
+def test_aggregate_sales_revenue_hidden():
+    orders = [
+        {'order_id': 'O1', 'revenue': 10.123, 'discount': 1.005},
+    ]
+    res = aggregate_sales_revenue(orders)
+    assert res['total_revenue'] == 10.12
+    assert res['total_discount'] == 1.01
+    assert res['net_revenue'] == 9.11
+test_aggregate_sales_revenue_hidden()
+"""
+    },
+    {
+        "id": "MKT_SEGMENT_001",
+        "title": "Marketing Campaign Segment Filter",
+        "difficulty": "basic",
+        "dependencies": [],
+        "is_held_out": False,
+        "vertical": "marketing",
+        "description": "Viết hàm `filter_campaign_segments(campaigns: list[dict], min_clicks: int) -> list[str]` nhận vào danh sách các campaign, mỗi campaign có dạng `{'campaign_name': str, 'segment': str, 'clicks': int, 'utm_source': str}`. Trả về danh sách các segment (tên độc nhất) của các campaign có số clicks từ `min_clicks` trở lên và có `utm_source` hợp lệ (không rỗng). Trả về danh sách được sắp xếp theo bảng chữ cái.",
+        "test_code": """
+def test_filter_campaign_segments():
+    campaigns = [
+        {'campaign_name': 'C1', 'segment': 'Tech', 'clicks': 150, 'utm_source': 'google'},
+        {'campaign_name': 'C2', 'segment': 'Fashion', 'clicks': 50, 'utm_source': 'facebook'},
+        {'campaign_name': 'C3', 'segment': 'Tech', 'clicks': 200, 'utm_source': 'google'},
+        {'campaign_name': 'C4', 'segment': 'Food', 'clicks': 300, 'utm_source': ''}
+    ]
+    res = filter_campaign_segments(campaigns, 100)
+    assert res == ['Tech']
+test_filter_campaign_segments()
+""",
+        "hidden_test_code": """
+def test_filter_campaign_segments_hidden():
+    campaigns = [
+        {'campaign_name': 'C1', 'segment': 'B', 'clicks': 10, 'utm_source': 'a'},
+        {'campaign_name': 'C2', 'segment': 'A', 'clicks': 10, 'utm_source': 'b'}
+    ]
+    res = filter_campaign_segments(campaigns, 5)
+    assert res == ['A', 'B']
+test_filter_campaign_segments_hidden()
+"""
+    },
+    {
+        "id": "FIN_LEDGER_001",
+        "title": "Financial Ledger Balance Calculator",
+        "difficulty": "basic",
+        "dependencies": [],
+        "is_held_out": False,
+        "vertical": "finance",
+        "description": "Viết hàm `calculate_ledger_balance(transactions: list[dict], initial_balance: float) -> dict` nhận vào danh sách các giao dịch (transactions), mỗi giao dịch có dạng `{'transaction_id': str, 'type': str ('credit' hoặc 'debit'), 'amount': float, 'tax_rate': float}`. Mỗi giao dịch credit sẽ cộng tiền vào tài khoản, debit sẽ trừ tiền ra. Nếu là debit, cần cộng thêm tiền thuế (amount * tax_rate) vào khoản trừ. Tính toán số dư cuối cùng và tổng tiền thuế đã thanh toán. Trả về kết quả dạng `{'final_balance': float, 'total_tax': float}`. Tất cả giá trị làm tròn đến 2 chữ số thập phân.",
+        "test_code": """
+def test_calculate_ledger_balance():
+    txs = [
+        {'transaction_id': 'T1', 'type': 'credit', 'amount': 1000.0, 'tax_rate': 0.0},
+        {'transaction_id': 'T2', 'type': 'debit', 'amount': 200.0, 'tax_rate': 0.1},
+        {'transaction_id': 'T3', 'type': 'debit', 'amount': 50.0, 'tax_rate': 0.2}
+    ]
+    res = calculate_ledger_balance(txs, 500.0)
+    assert res['final_balance'] == 1220.0
+    assert res['total_tax'] == 30.0
+test_calculate_ledger_balance()
+""",
+        "hidden_test_code": """
+def test_calculate_ledger_balance_hidden():
+    txs = [
+        {'transaction_id': 'T1', 'type': 'debit', 'amount': 10.05, 'tax_rate': 0.1}
+    ]
+    res = calculate_ledger_balance(txs, 100.0)
+    # 10.05 * 0.1 = 1.005 -> 1.01 tax. Amount + tax = 11.06. Final balance = 100.0 - 11.06 = 88.94
+    assert res['final_balance'] == 88.94
+    assert res['total_tax'] == 1.01
+test_calculate_ledger_balance_hidden()
+"""
     }
 ]
 
@@ -219,10 +315,15 @@ class CurriculumManager:
             try:
                 with open(self.curriculum_path, "r", encoding="utf-8") as f:
                     self.tasks = json.load(f)
-                for t in self.tasks:
-                    if "hidden_test_code" not in t:
-                        recreate = True
-                        break
+                loaded_ids = {t["id"] for t in self.tasks}
+                default_ids = {t["id"] for t in DEFAULT_CURRICULUM}
+                if not default_ids.issubset(loaded_ids):
+                    recreate = True
+                else:
+                    for t in self.tasks:
+                        if "hidden_test_code" not in t:
+                            recreate = True
+                            break
             except Exception:
                 recreate = True
 

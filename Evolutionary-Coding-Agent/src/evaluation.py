@@ -116,17 +116,34 @@ class EvaluationFramework:
                 
                 # Extract and register skills if passed
                 skills_extracted = []
+                from src.taxonomy.verticals import infer_vertical_primary
+                task_vertical = task.get("vertical") or infer_vertical_primary(task["description"])
+                
                 if val_res["status"] == "passed":
                     skills_extracted = skill_manager.extract_and_register_skills(
                         task_id=task["id"],
                         task_description=task["description"],
-                        code=res["code"]
+                        code=res["code"],
+                        vertical_hint=task_vertical
                     )
+                    
+                    # Fetch verticals of the newly extracted skills for logging trace
+                    extracted_skills_verticals = []
+                    if skills_extracted:
+                        all_skills = memory_engine.get_all_memories("skill")
+                        skill_id_set = set(skills_extracted)
+                        for sk in all_skills:
+                            if sk["id"] in skill_id_set:
+                                extracted_skills_verticals.append(sk.get("metadata", {}).get("vertical", "generic"))
+                else:
+                    extracted_skills_verticals = []
                     
                 val_res.update({
                     "task_id": task["id"],
                     "code": res["code"],
                     "skills_extracted": skills_extracted,
+                    "task_vertical": task_vertical,
+                    "extracted_skills_verticals": extracted_skills_verticals,
                     "insights_retrieved": res.get("insights_retrieved", []),
                     "skills_retrieved": res.get("skills_retrieved", [])
                 })

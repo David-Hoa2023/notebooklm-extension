@@ -50,6 +50,12 @@ class MemoryLifecycleManager:
             # A normalized score of 0.92+ roughly corresponds to 0.85+ similarity.
             # Let's check if dense_score >= self.dedup_threshold
             if c["dense_score"] >= self.dedup_threshold:
+                if namespace == "skill" and metadata:
+                    new_vert = metadata.get("vertical", "generic").lower().strip()
+                    old_meta = c.get("metadata") or {}
+                    old_vert = old_meta.get("vertical", "generic").lower().strip()
+                    if new_vert != old_vert:
+                        continue
                 duplicate = c
                 break
                 

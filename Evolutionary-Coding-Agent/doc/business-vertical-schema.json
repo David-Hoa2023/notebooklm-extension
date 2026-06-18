@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BusinessVerticalSchema",
+  "description": "Schema specifying the business vertical dual-tagging metadata for tasks and skills.",
+  "type": "object",
+  "properties": {
+    "domain": {
+      "type": "string",
+      "description": "Technical domain (e.g., regex, json, smtp, math, datetime, string_parsing, file_io, algorithms, data_structures, error_handling, testing, generic)."
+    },
+    "vertical": {
+      "type": "string",
+      "enum": ["sales", "marketing", "finance", "generic"],
+      "description": "Business vertical (sales, marketing, finance, or generic). Configurable via config.yaml verticals.allowed list."
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "domain": { "type": "string" },
+              "vertical": { "type": "string" }
+            },
+            "required": ["name", "domain", "vertical"]
+          }
+        },
+        "required": ["description", "metadata"]
+      }
+    }
+  },
+  "required": ["domain", "vertical"],
+  "examples": [
+    {
+      "domain": "math",
+      "vertical": "sales",
+      "examples": [
+        {
+          "description": "A sales aggregation helper that sums up product revenues",
+          "metadata": {
+            "name": "aggregate_product_revenue",
+            "domain": "math",
+            "vertical": "sales"
+          }
+        }
+      ]
+    }
+  ]
+}

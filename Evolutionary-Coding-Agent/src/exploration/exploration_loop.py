@@ -68,6 +68,11 @@ class ExplorationLoop:
         success_rate = compute_recent_success_rate(runs)
         gap_info = skill_gap_analyzer.analyze()
         gap_targets = skill_gap_analyzer.top_gaps(limit=3)
+        
+        vertical_targets = []
+        if config_instance.get("verticals.explore_target_verticals", True):
+            from src.exploration.vertical_gap_analyzer import vertical_gap_analyzer
+            vertical_targets = vertical_gap_analyzer.top_vertical_gaps(limit=3)
 
         pipeline = AgentPipeline(memory_enabled=True, frozen_memory=False)
         results = []
@@ -124,6 +129,7 @@ class ExplorationLoop:
                     skill_summaries=gap_info["skill_names"],
                     gap_targets=gap_targets,
                     avoid_topics=avoid_topics,
+                    vertical_targets=vertical_targets,
                 )
                 proposed.novelty_score = novelty_scorer.score(
                     f"{proposed.title} {proposed.description}"
@@ -136,6 +142,8 @@ class ExplorationLoop:
                         "difficulty": proposed.difficulty,
                         "novelty_score": proposed.novelty_score,
                         "gap_targets": gap_targets,
+                        "vertical_targets": vertical_targets,
+                        "vertical_target": proposed.vertical_target,
                         "success_rate": success_rate,
                     },
                 )

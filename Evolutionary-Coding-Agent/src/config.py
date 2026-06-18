@@ -44,14 +44,41 @@ class Config:
         self.data["project"]["seed"] = seed
         self.setup_seeds()
     def get(self, key_path: str, default=None):
+        # Default fallbacks for business verticals
+        verticals_defaults = {
+            "verticals.enabled": True,
+            "verticals.allowed": ["sales", "marketing", "finance", "generic"],
+            "verticals.retrieval_mode": "strict",
+            "verticals.explore_target_verticals": True
+        }
+        
         keys = key_path.split(".")
         current = self.data
         for k in keys:
             if isinstance(current, dict) and k in current:
                 current = current[k]
             else:
+                if key_path in verticals_defaults and default is None:
+                    return verticals_defaults[key_path]
                 return default
         return current
+
+    def get_bool(self, key_path: str, default: bool = False) -> bool:
+        val = self.get(key_path, default)
+        return bool(val)
+
+    def get_list(self, key_path: str, default: list = None) -> list:
+        val = self.get(key_path, default)
+        if val is None:
+            return []
+        if isinstance(val, list):
+            return val
+        return [val]
+
+    def get_str(self, key_path: str, default: str = "") -> str:
+        val = self.get(key_path, default)
+        return str(val) if val is not None else default
+
 
 # Global config instance
 config_instance = Config()

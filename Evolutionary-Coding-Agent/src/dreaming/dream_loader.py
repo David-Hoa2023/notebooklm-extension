@@ -72,6 +72,14 @@ class DreamLoader:
                     if not any(kw in desc_lower for kw in keywords):
                         continue
                         
+                # Enforce vertical match: BIZ_DREAM_001
+                if config_instance.get("verticals.enabled", True):
+                    from src.taxonomy.verticals import infer_vertical_primary
+                    task_vertical = infer_vertical_primary(description)
+                    insight_vertical = meta.get("vertical", "generic").lower().strip()
+                    if insight_vertical != "generic" and insight_vertical != task_vertical:
+                        continue
+                        
                 insights.append(c)
                 if len(insights) >= limit:
                     break

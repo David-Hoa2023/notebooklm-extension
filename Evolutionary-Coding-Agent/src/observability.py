@@ -376,7 +376,59 @@ class ObservabilityManager:
         # Convert seed breakdown to string format
         seed_breakdown_str = ", ".join(f"Seed {s}: {stats['passed']}/{stats['total']}" for s, stats in sorted(seed_breakdown.items()))
 
+        # Compute vertical coverage block (BIZ_DASH_001)
+        try:
+            from src.taxonomy.verticals import get_allowed_verticals
+            from src.memory.memory_engine import memory_engine
+            
+            allowed_verticals = get_allowed_verticals()
+            active_skills = memory_engine.get_all_memories(namespace="skill")
+            
+            vertical_counts = {v: 0 for v in allowed_verticals}
+            vertical_retrievable_counts = {v: 0 for v in allowed_verticals}
+            
+            for sk in active_skills:
+                meta = sk.get("metadata", {}) or {}
+                vert = meta.get("vertical", "generic").lower().strip()
+                if vert in vertical_counts:
+                    vertical_counts[vert] += 1
+                    if meta.get("retrievable", False):
+                        vertical_retrievable_counts[vert] += 1
+                else:
+                    vertical_counts["generic"] = vertical_counts.get("generic", 0) + 1
+                    if meta.get("retrievable", False):
+                        vertical_retrievable_counts["generic"] = vertical_retrievable_counts.get("generic", 0) + 1
+            
+            non_generic_allowed = [v for v in allowed_verticals if v != "generic"]
+            verticals_covered = [v for v, c in vertical_retrievable_counts.items() if c > 0 and v != "generic"]
+            vertical_gaps = [v for v in non_generic_allowed if v not in verticals_covered]
+            
+            if non_generic_allowed:
+                vertical_coverage_rate = len(verticals_covered) / len(non_generic_allowed)
+            else:
+                vertical_coverage_rate = 1.0
+                
+            vertical_coverage = {
+                "allowed": allowed_verticals,
+                "counts": vertical_counts,
+                "retrievable_counts": vertical_retrievable_counts,
+                "covered": verticals_covered,
+                "gaps": vertical_gaps,
+                "coverage_rate": vertical_coverage_rate
+            }
+        except Exception as e:
+            print(f"Error calculating vertical coverage metrics: {e}")
+            vertical_coverage = {
+                "allowed": ["sales", "marketing", "finance", "generic"],
+                "counts": {},
+                "retrievable_counts": {},
+                "covered": [],
+                "gaps": [],
+                "coverage_rate": 0.0
+            }
+
         return {
+            "vertical_coverage": vertical_coverage,
             "tasks": task_metrics,
             "summary": {
                 "mean_plasticity_gain": np.mean(valid_pgs) if valid_pgs else 0.0,
@@ -915,6 +967,17 @@ class ObservabilityManager:
             </div>
         </div>
 
+        <!-- Business Verticals Coverage Panel -->
+        <div class="chart-panel" style="margin-top: 1.5rem;" id="vertical-coverage-panel">
+            <div class="panel-title">Độ Bao Phủ Business Verticals (Lĩnh Vực Kinh Doanh)</div>
+            <div style="margin-bottom: 1.5rem; font-size: 0.9rem; color: var(--text-muted);">
+                Theo dõi số lượng Skill đã tích lũy và số lượng Skill thực tế đã qua kiểm thử (retrievable) cho mỗi lĩnh vực kinh doanh trong hệ thống.
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem;" id="vertical-cards-container">
+                <!-- Will be populated by JS -->
+            </div>
+        </div>
+
         <!-- Failed Exploration Trace Stderrs -->
         <div class="chart-panel" style="margin-top: 1.5rem; display: none;" id="failed-logs-panel">
             <div class="panel-title" style="color: var(--danger);">Nhật Ký Lỗi Runtime / Thất Bại Active Exploration</div>
@@ -1158,6 +1221,69 @@ class ObservabilityManager:
                 }}
             }}
         }});
+
+        // Business Vertical Coverage Population
+        if (data.vertical_coverage) {{
+            const vert = data.vertical_coverage;
+            const container = document.getElementById('vertical-cards-container');
+            if (container) {{
+                container.innerHTML = '';
+                vert.allowed.forEach(v => {{
+                    const count = vert.counts[v] || 0;
+                    const retrievableCount = vert.retrievable_counts[v] || 0;
+                    
+                    const card = document.createElement('div');
+                    card.style.padding = '1.2rem';
+                    card.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
+                    card.style.border = '1px solid var(--border)';
+                    card.style.borderRadius = '12px';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+                    card.style.gap = '8px';
+                    
+                    const header = document.createElement('div');
+                    header.style.display = 'flex';
+                    header.style.justifyContent = 'space-between';
+                    header.style.alignItems = 'center';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.style.fontWeight = 'bold';
+                    nameSpan.style.fontSize = '1.1rem';
+                    nameSpan.style.textTransform = 'capitalize';
+                    if (v === 'sales') nameSpan.style.color = '#38bdf8';
+                    else if (v === 'marketing') nameSpan.style.color = '#fb7185';
+                    else if (v === 'finance') nameSpan.style.color = '#34d399';
+                    else nameSpan.style.color = 'var(--text-muted)';
+                    nameSpan.innerText = v;
+                    
+                    const statusBadge = document.createElement('span');
+                    statusBadge.style.fontSize = '0.75rem';
+                    statusBadge.style.padding = '2px 6px';
+                    statusBadge.style.borderRadius = '4px';
+                    if (retrievableCount > 0) {{
+                        statusBadge.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                        statusBadge.style.color = 'var(--success)';
+                        statusBadge.innerText = 'Active';
+                    }} else {{
+                        statusBadge.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                        statusBadge.style.color = 'var(--text-muted)';
+                        statusBadge.innerText = 'Uncovered';
+                    }}
+                    
+                    header.appendChild(nameSpan);
+                    header.appendChild(statusBadge);
+                    
+                    const stats = document.createElement('div');
+                    stats.style.fontSize = '0.9rem';
+                    stats.style.color = 'var(--text-color)';
+                    stats.innerHTML = `Skills: <strong>${{count}}</strong> | Verified: <strong style="color: var(--success);">${{retrievableCount}}</strong>`;
+                    
+                    card.appendChild(header);
+                    card.appendChild(stats);
+                    container.appendChild(card);
+                }});
+            }}
+        }}
 
         // Active Exploration Population
         if (data.exploration) {{
