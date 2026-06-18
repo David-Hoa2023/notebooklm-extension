@@ -40,12 +40,14 @@ Last updated: 2026-06-17 (noon). Living record of audits, Phase 5 hardening, Pha
    - Added dashboard indicators and Javascript UI card populators to display dreaming stats in the HTML report.
    - Created `scratch/verify_dream_session.py` to diagnose the dreaming pipeline verification checklist.
    - Developed unit and integration tests (bringing the suite from 26 to 35 tests, all passed).
+   - **Self-Healing DB Repopulation**: Enabled automatic, local hashing-based repopulation of the SQLite `dream` namespace from filesystem JSON files whenever the database starts empty or gets cleared.
 
 ### Verified metrics (DeepSeek 35-Test suite)
 
-- All **35/35** unit and integration tests passed cleanly in 22.13 seconds.
+- All **35/35** unit and integration tests passed cleanly in 13.08 seconds.
 - Promotion CLI command (`python run.py dream-promote --id <dream_insight_id>`) verified to copy dream insights into `insight` namespace.
-- Verify checklist script (`scratch/verify_dream_session.py`) verified to parse active dreams successfully.
+- Verify checklist script (`scratch/verify_dream_session.py`) verified to return all `[PASS]` checks.
+- **E2E Dream Injection**: Verified that running `first-pass --seeds 42` successfully repopulated the database and injected 3 distilled dreams from a prior session into the pipeline execution of `COMPLEX_001`.
 
 ---
 
