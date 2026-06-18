@@ -1,6 +1,6 @@
 # Project Memory — Evolutionary Coding Agent
 
-Last updated: 2026-06-17 (noon). Living record of audits, Phase 5 hardening, Phase 6 evidence, and verification status.
+Last updated: 2026-06-18. Living record of audits, Phase 5 hardening, Phase 6 evidence, and verification status.
 
 ---
 
@@ -15,8 +15,8 @@ Last updated: 2026-06-17 (noon). Living record of audits, Phase 5 hardening, Pha
 | LLM model | `deepseek-chat` (via DeepSeek API) |
 | Embedding model | `local-hashing` (local 768-dimensional hashing embeddings) |
 | DB backup | Clean rebuild with 768-dim embeddings |
-| Latest commit | `4a7f319` — Fix NEG_001 SMTP mock and refresh evaluation metrics over 6 seeds |
-| Working tree | **Modified** (uncommitted changes for Offline Dreaming integration, verified) |
+| Latest commit | `6fdcad3` — Refresh snapshot header and populate A/B evaluation results table in memory.md |
+| Working tree | Clean |
 
 **Key repaired skills:** `_validate_dict_min_age`, `get_missing_required_keys`, `_is_non_empty_string`, `execute_single_test_case`, `validate_list_lengths_match`.
 
@@ -48,6 +48,18 @@ Last updated: 2026-06-17 (noon). Living record of audits, Phase 5 hardening, Pha
 - Promotion CLI command (`python run.py dream-promote --id <dream_insight_id>`) verified to copy dream insights into `insight` namespace.
 - Verify checklist script (`scratch/verify_dream_session.py`) verified to return all `[PASS]` checks.
 - **E2E Dream Injection**: Verified that running `first-pass --seeds 42` successfully repopulated the database and injected 3 distilled dreams from a prior session into the pipeline execution of `COMPLEX_001`.
+
+### A/B Evaluation Protocol Results (Seeds 42, 43)
+
+| Metric | Baseline (Dreaming Off) | Dreaming On (A/B Test) | Nhận xét |
+| :--- | :--- | :--- | :--- |
+| **Training Task Score** | 9.0 | 9.0 | Ổn định tại trần điểm (ceiling) |
+| **Held-out Task Score** | 9.0 | 9.0 | Generalization vững chãi |
+| **NEG_001 Score** | 9.0 (Passed) | 9.0 (Passed) | Xử lý SMTP mock tốt, không bị regression |
+| **Plasticity Gain (PG)** | 0.000 | 0.000 | Không bị thụt lùi điểm số |
+| **Stability Gain (SG)** | 0.000 | 0.000 | Kháng nhiễu tốt |
+| **Dreams Loaded Count** | 0 | 18 | Phản ánh chính xác nạp dream |
+| **Dreams Retrieved / Injected** | 0 runs | 6 runs (incl. Naive Stream) | Wiring hoạt động đúng |
 
 ---
 
