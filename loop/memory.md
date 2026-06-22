@@ -36,13 +36,14 @@ This document logs the key changes, architecture, and design decisions made to i
    - **Refined Parser Prompts**: Updated parser instructions ([storm_stages.py](file:///D:/AI_project/loop/loop/storm_stages.py)) to preserve full detailed original text (satisfying the 500-word constraint) and remove irrelevant analogies (e.g., electrical current symbols).
    - **Structured vs Polished Alignment**: Implemented automatic post-processing of polished article deliverables during the peer review stage to strip physical electrical analogies and rewrite the corrected file back to disk, aligning all final reports.
    - **Knowledge-Storm Empty Retrieval Guard**: Monkey-patched `StormInformationTable.retrieve_information` in `loop/storm_adapter.py` to safely return an empty list when `collected_snippets` is empty or if a `ValueError` (such as `"Expected 2D array, got 1D array instead: array=[]"` from scikit-learn's `cosine_similarity`) is thrown due to empty search results. This prevents orchestrator crashes during search-empty retrieval phases.
+   - **Early File-Missing Hardening**: Hardened `run_stage_article` and `run_stage_peer_review` in `loop/storm_stages.py` to raise a `FileNotFoundError` immediately if their expected STORM output file is missing after generation/sync. This triggers an execution failure early and prevents the orchestrator from parsing empty content or entering a semantic rejection loop.
 
 
 ---
 
 ## Verification Outcomes
 
-- **Unit Tests**: Added robust suites to `loop/tests.py`, including custom config dynamic threshold validations and production fixes (schema wrapping, unicode url encoding, and 403 bot-detection bypass), expanding the unit test count to **35 passing tests**.
+- **Unit Tests**: Added robust suites to `loop/tests.py`, including custom config dynamic threshold validations and production fixes (schema wrapping, unicode url encoding, and 403 bot-detection bypass), expanding the unit test count to **37 passing tests**.
 - **Mock STORM Run**: Verified 3 configured topics (`EV battery supply chain 2026`, `Solid-state battery commercialization`, and `Chinese EV export tariffs impact` — totaling 18 stage items) concurrently resolving their stages over a 9-iteration loop under config-driven thresholds.
 - **Adversarial Recovery**:
   - `INJECT_MISSING_PERSPECTIVE="historian"` correctly triggered failure at `perspectives` attempt 0, recovering on attempt 1.

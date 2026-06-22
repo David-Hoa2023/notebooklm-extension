@@ -104,7 +104,7 @@ python -m unittest loop.tests
 ```
 Output:
 ```text
-Ran 35 tests in 1.070s
+Ran 37 tests in 1.070s
 OK
 ```
 
@@ -175,7 +175,7 @@ The new/updated components are under `loop/`:
 - **Config-Driven Thresholds**: Validators and verifier gates retrieve validation limits dynamically from the configuration block (specifically `required_perspectives`, `contradiction_map_min_clashes`, `synthesis_min_findings`, `peer_review_min_confidence`, `min_word_count`, and `min_outline_depth`) using Pydantic context validation and verifier config parameters, enabling fully customizable tuning from YAML configs.
 
 ### Integration Verification
-1. **Automated Unit Tests**: Verified via `python -m unittest loop.tests` (35 tests passed).
+1. **Automated Unit Tests**: Verified via `python -m unittest loop.tests` (37 tests passed).
 2. **Mock STORM Verification Cycle**: Running `python -m loop.run --config loop.config.storm.example.yaml --mock-storm` simulates a 9-iteration run processing 3 configured topics (`EV battery supply chain 2026`, `Solid-state battery commercialization`, and `Chinese EV export tariffs impact` — totaling 18 stage items) concurrently up to `topic_concurrency: 2`. All stages run sequentially within each topic and retry correctly on attempts.
 3. **Adversarial Injections Test**:
    - `INJECT_MISSING_PERSPECTIVE="historian"` correctly drops the historian perspective on attempt 0 (Iteration 1) and recovers on attempt 1 (Iteration 2).

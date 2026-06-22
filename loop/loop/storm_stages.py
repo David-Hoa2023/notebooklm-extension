@@ -286,11 +286,11 @@ def run_stage_article(topic: str, attempt: int, last_rejection: Optional[str], c
         runner.post_run()
         sync_storm_files(topic, config)
 
-    if os.path.exists(article_txt_path):
-        with open(article_txt_path, "r", encoding="utf-8") as f:
-            article_content = f.read()
-    else:
-        article_content = "No article content."
+    if not os.path.exists(article_txt_path):
+        raise FileNotFoundError(f"STORM article generation did not produce storm_gen_article.txt at {article_txt_path}")
+
+    with open(article_txt_path, "r", encoding="utf-8") as f:
+        article_content = f.read()
         
     # Load actual STORM citation mapping to avoid hallucinations
     url_to_info_path = os.path.join(output_dir, "url_to_info.json").replace("\\", "/")
@@ -397,17 +397,17 @@ def run_stage_peer_review(topic: str, attempt: int, last_rejection: Optional[str
         runner.post_run()
         sync_storm_files(topic, config)
 
-    if os.path.exists(polished_txt_path):
-        with open(polished_txt_path, "r", encoding="utf-8") as f:
-            polished_content = f.read()
-            
-        cleaned_content = clean_electrical_analogy(polished_content)
-        if cleaned_content != polished_content:
-            polished_content = cleaned_content
-            with open(polished_txt_path, "w", encoding="utf-8") as f:
-                f.write(polished_content)
-    else:
-        polished_content = "No polished article content."
+    if not os.path.exists(polished_txt_path):
+        raise FileNotFoundError(f"STORM polishing did not produce storm_gen_article_polished.txt at {polished_txt_path}")
+
+    with open(polished_txt_path, "r", encoding="utf-8") as f:
+        polished_content = f.read()
+        
+    cleaned_content = clean_electrical_analogy(polished_content)
+    if cleaned_content != polished_content:
+        polished_content = cleaned_content
+        with open(polished_txt_path, "w", encoding="utf-8") as f:
+            f.write(polished_content)
         
     # Run P4 Peer Review LLM pass
     p4_template = load_prompt_template("p4_peer_review.md")

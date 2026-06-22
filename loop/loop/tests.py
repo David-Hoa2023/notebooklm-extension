@@ -618,6 +618,32 @@ class TestProductionFixes(unittest.TestCase):
             self.assertIn("low_confidence", checks_failed)
             self.assertIn("confidence 5 is below required 7", reason)
 
+    def test_run_stage_article_missing_file_throws_error(self):
+        from loop.storm_stages import run_stage_article
+        config = {
+            "run_id": "test_run_123",
+            "mock_storm": False
+        }
+        with patch("loop.storm_stages.build_storm_runner") as mock_build, \
+             patch("loop.storm_stages.sync_storm_files") as mock_sync:
+            mock_runner = MagicMock()
+            mock_build.return_value = mock_runner
+            with self.assertRaises(FileNotFoundError):
+                run_stage_article("test topic", 0, None, config)
+
+    def test_run_stage_peer_review_missing_file_throws_error(self):
+        from loop.storm_stages import run_stage_peer_review
+        config = {
+            "run_id": "test_run_123",
+            "mock_storm": False
+        }
+        with patch("loop.storm_stages.build_storm_runner") as mock_build, \
+             patch("loop.storm_stages.sync_storm_files") as mock_sync:
+            mock_runner = MagicMock()
+            mock_build.return_value = mock_runner
+            with self.assertRaises(FileNotFoundError):
+                run_stage_peer_review("test topic", 0, None, config)
+
 
 
 
