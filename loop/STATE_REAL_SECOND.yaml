@@ -1,0 +1,78 @@
+run_id: 1bc3e040-6d2d-4d52-ace8-f1f3d91f9702
+iteration: 15
+max_iterations: 15
+items_total: 6
+items_passed: 4
+active_rejections: 2
+status: escalated
+items:
+  solidstate_battery_commercialization::perspectives:
+    status: passed
+    attempts: 1
+    last_rejection: null
+    artifact_path: artifacts/raw/1bc3e040-6d2d-4d52-ace8-f1f3d91f9702/solidstate_battery_commercialization/perspectives.json
+    verified_at: '2026-06-22T16:35:55.990208'
+    stage: perspectives
+    topic_slug: solidstate_battery_commercialization
+    depends_on: []
+    override_reason: null
+  solidstate_battery_commercialization::contradictions:
+    status: passed
+    attempts: 0
+    last_rejection: null
+    artifact_path: artifacts/raw/1bc3e040-6d2d-4d52-ace8-f1f3d91f9702/solidstate_battery_commercialization/contradiction_map.json
+    verified_at: '2026-06-22T16:36:02.435951'
+    stage: contradictions
+    topic_slug: solidstate_battery_commercialization
+    depends_on:
+    - solidstate_battery_commercialization::perspectives
+    override_reason: null
+  solidstate_battery_commercialization::outline:
+    status: passed
+    attempts: 1
+    last_rejection: null
+    artifact_path: artifacts/raw/1bc3e040-6d2d-4d52-ace8-f1f3d91f9702/solidstate_battery_commercialization/outline.json
+    verified_at: '2026-06-22T16:36:22.742353'
+    stage: outline
+    topic_slug: solidstate_battery_commercialization
+    depends_on:
+    - solidstate_battery_commercialization::contradictions
+    override_reason: null
+  solidstate_battery_commercialization::synthesis:
+    status: passed
+    attempts: 0
+    last_rejection: null
+    artifact_path: artifacts/raw/1bc3e040-6d2d-4d52-ace8-f1f3d91f9702/solidstate_battery_commercialization/research_briefing.json
+    verified_at: '2026-06-22T16:36:32.610502'
+    stage: synthesis
+    topic_slug: solidstate_battery_commercialization
+    depends_on:
+    - solidstate_battery_commercialization::outline
+    override_reason: null
+  solidstate_battery_commercialization::article:
+    status: pre_failed
+    attempts: 9
+    last_rejection: 'Execution Error: Expected 2D array, got 1D array instead:
+
+      array=[].
+
+      Reshape your data either using array.reshape(-1, 1) if your data has a single
+      feature or array.reshape(1, -1) if it contains a single sample.'
+    artifact_path: null
+    verified_at: null
+    stage: article
+    topic_slug: solidstate_battery_commercialization
+    depends_on:
+    - solidstate_battery_commercialization::synthesis
+    override_reason: null
+  solidstate_battery_commercialization::peer_review:
+    status: pending
+    attempts: 0
+    last_rejection: null
+    artifact_path: null
+    verified_at: null
+    stage: peer_review
+    topic_slug: solidstate_battery_commercialization
+    depends_on:
+    - solidstate_battery_commercialization::article
+    override_reason: null
