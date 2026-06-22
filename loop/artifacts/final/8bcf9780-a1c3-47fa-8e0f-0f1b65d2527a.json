@@ -1,0 +1,32 @@
+{
+  "TSLA": {
+    "company_name": "Tesla, Inc.",
+    "revenue": 96773.0,
+    "margin": 0.178,
+    "stock_price": 400.15,
+    "source_url": "https://finance.yahoo.com/quote/TSLA",
+    "metrics": {
+      "market_cap": 1280000.0
+    }
+  },
+  "BYD": {
+    "company_name": "BYD Company Limited",
+    "revenue": 85000.0,
+    "margin": 17.5,
+    "stock_price": 84.68,
+    "source_url": "https://finance.yahoo.com/quote/BYDDY",
+    "metrics": {
+      "market_cap": 85000.0
+    }
+  },
+  "RIVN": {
+    "company_name": "Rivian Automotive, Inc.",
+    "revenue": 5370000000.0,
+    "margin": -0.45,
+    "stock_price": 16.52,
+    "source_url": "https://finance.yahoo.com/quote/RIVN",
+    "metrics": {
+      "market_cap": 17000000000.0
+    }
+  }
+}

@@ -1,0 +1,11 @@
+# Dependencies for Stanford STORM and Nav Toor research loop
+knowledge-storm>=1.0.0
+openai>=1.0.0
+pyyaml>=6.0
+pydantic>=2.0.0
+
+# Note for Windows/Conda users:
+# Installing knowledge-storm might install packages that conflict with local PyTorch/Transformers dependencies.
+# If importing PyTorch throws a RuntimeError regarding triton ("Should never be installed"),
+# uninstall the triton stub package from your environment:
+#   pip uninstall triton

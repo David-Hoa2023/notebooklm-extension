@@ -1,0 +1,21 @@
+# Configuration for custom STORM Option B run
+mode: storm_option_b
+max_iterations: 15
+state_file: "STATE.yaml"
+batch_size: 100
+topic_concurrency: 1
+
+roles:
+  planner_verifier: "google/gemini-2.5-flash"
+  executor_swarm: "google/gemini-2.5-flash"
+
+nav_toor:
+  min_word_count: 500
+  min_outline_depth: 2
+  contradiction_map_min_clashes: 3
+  synthesis_min_findings: 5
+  peer_review_min_confidence: 7
+
+# Custom topic requested by user
+topics:
+  - "loop engineering in AI in 2026"

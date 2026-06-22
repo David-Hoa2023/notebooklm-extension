@@ -213,15 +213,15 @@ We successfully executed the E2E real-mode STORM Option B research pipeline on t
 To evaluate the effectiveness of the local deterministic verification hardening in reducing verifier retries, we ran the real research pipeline on a second topic, `"Solid-state battery commercialization"`, using `google/gemini-2.5-flash` under Run ID `1bc3e040-6d2d-4d52-ace8-f1f3d91f9702` (configured via `loop.config.real_second.yaml`).
 
 #### Outcomes & Retry Reduction vs. 84-Iteration Baseline
-The pipeline executed the first 4 stages successfully on the first or second attempt:
-- **`perspectives`**: Passed in **1 attempt** (0 retries).
-- **`contradictions`**: Passed in **0 attempts** (first-pass success).
-- **`outline`**: Passed in **1 attempt** (1 retry to satisfy schema structure and perspective metadata coverage).
-- **`synthesis`**: Passed in **0 attempts** (first-pass success).
+The pipeline executed the first 4 stages successfully with very few retries:
+- **`perspectives`**: Passed with **1 retry** (attempts: 1, meaning 1 failure before passing, 2 attempts total).
+- **`contradictions`**: Passed with **0 retries** (attempts: 0, first-pass success).
+- **`outline`**: Passed with **1 retry** (attempts: 1, 1 retry to satisfy schema structure and perspective metadata coverage).
+- **`synthesis`**: Passed with **0 retries** (attempts: 0, first-pass success).
 
 *Baseline comparison*: In the baseline run on `'loop engineering in AI in 2026'`, the verifier ran 84 total iterations because it lacked cheap local checks, repeatedly querying OpenRouter on raw formatting bugs, missing keys, and invalid lists. With the new deterministic checks, structural issues were resolved immediately before calling the LLM, reducing the retry rate for perspectives/contradictions/outline/synthesis to near zero.
 
-*Upstream Library Block*: The `article` generation stage failed with an execution error originating from the upstream `knowledge-storm` library's information retrieval module:
-`ValueError: Expected 2D array, got 1D array instead: array=[]` inside `cosine_similarity`. This occurred when the DuckDuckGo search query returned zero snippets for a specific sub-topic, causing scikit-learn to crash on empty inputs. Despite this data-gathering error from STORM, the verification orchestration functioned exactly as designed.
+*Upstream Library Block*: The `article` generation stage hit **9 pre_failed execution attempts** before max iterations escalated. The underlying cause was an execution error originating from the upstream `knowledge-storm` library's information retrieval module:
+`ValueError: Expected 2D array, got 1D array instead: array=[]` inside `cosine_similarity`. This occurred when the DuckDuckGo search query returned zero snippets for a specific sub-topic, causing scikit-learn to crash on empty inputs. Despite this data-gathering error from STORM, the verification orchestration functioned exactly as designed. We have since added a guard in our adapter to safely bypass `cosine_similarity` validations on empty arrays.
 
 

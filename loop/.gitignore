@@ -1,0 +1,12 @@
+# Environment variables
+.env
+
+# Python caching
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local logs and LaTeX temp files
+*.log
+*.aux
+*.pdf

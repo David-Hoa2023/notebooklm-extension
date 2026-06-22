@@ -1,0 +1,14 @@
+# Configuration for Autonomous Self-Verifying Loop
+max_iterations: 15
+state_file: "STATE.yaml"
+batch_size: 100
+
+roles:
+  planner_verifier: "z-ai/glm-5.2"
+  executor_swarm: "moonshotai/kimi-k2.6"
+
+# Items to process when running in real (non-mock) mode
+items:
+  - "TSLA"
+  - "BYD"
+  - "RIVN"

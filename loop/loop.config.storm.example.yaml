@@ -1,0 +1,53 @@
+# Configuration for Autonomous Self-Verifying Loop (STORM Option B)
+mode: storm_option_b
+max_iterations: 15
+state_file: "STATE.yaml"
+batch_size: 100
+topic_concurrency: 2
+
+roles:
+  planner_verifier: "z-ai/glm-5.2"
+  executor_swarm: "moonshotai/kimi-k2.6"
+  storm_conv_simulator: "moonshotai/kimi-k2.6"
+  storm_question_asker: "moonshotai/kimi-k2.6"
+  storm_outline_gen: "z-ai/glm-5.2"
+  storm_article_gen: "z-ai/glm-5.2"
+  storm_polish: "z-ai/glm-5.2"
+  peer_reviewer: "z-ai/glm-5.2"
+
+# Stanford STORM configuration parameters
+storm:
+  max_perspective: 5
+  max_conv_turn: 3
+  search_top_k: 3
+  retriever: "duckduckgo"
+
+# Nav Toor multi-perspective research workflow parameters
+nav_toor:
+  required_perspectives:
+    - id: "practitioner"
+      label: "Practitioner"
+      focus: "Daily realities academics miss"
+    - id: "academic"
+      label: "Academic"
+      focus: "Peer-reviewed evidence vs popular belief"
+    - id: "skeptic"
+      label: "Skeptic"
+      focus: "Counterarguments proponents ignore"
+    - id: "economist"
+      label: "Economist"
+      focus: "Financial incentives shaping research"
+    - id: "historian"
+      label: "Historian"
+      focus: "Patterns from similar past cases"
+  contradiction_map_min_clashes: 3
+  synthesis_min_findings: 5
+  peer_review_min_confidence: 7
+  min_word_count: 500
+  min_outline_depth: 2
+
+# Topics to process when running in STORM mode
+topics:
+  - "EV battery supply chain 2026"
+  - "Solid-state battery commercialization"
+  - "Chinese EV export tariffs impact"

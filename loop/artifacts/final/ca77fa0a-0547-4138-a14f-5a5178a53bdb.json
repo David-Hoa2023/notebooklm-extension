@@ -1,0 +1,62 @@
+{
+  "ev_battery_supply_chain_2026": {
+    "topic": "EV battery supply chain 2026",
+    "polished_article": "Polished: This is a highly refined EV battery supply chain report.",
+    "peer_review": {
+      "confidence_scores": {
+        "perspectives": 8,
+        "contradictions": 8,
+        "synthesis": 8,
+        "article": 8
+      },
+      "overall_confidence": 8,
+      "bias_check": "No significant bias detected.",
+      "missing_perspectives": [],
+      "overall_grade": "A"
+    },
+    "metadata": {
+      "attempt": 1,
+      "timestamp": "2026-06-22T12:03:55.506858"
+    }
+  },
+  "solidstate_battery_commercialization": {
+    "topic": "Solid-state battery commercialization",
+    "polished_article": "Polished: This is a highly refined EV battery supply chain report.",
+    "peer_review": {
+      "confidence_scores": {
+        "perspectives": 8,
+        "contradictions": 8,
+        "synthesis": 8,
+        "article": 8
+      },
+      "overall_confidence": 8,
+      "bias_check": "No significant bias detected.",
+      "missing_perspectives": [],
+      "overall_grade": "A"
+    },
+    "metadata": {
+      "attempt": 1,
+      "timestamp": "2026-06-22T12:03:55.507371"
+    }
+  },
+  "chinese_ev_export_tariffs_impact": {
+    "topic": "Chinese EV export tariffs impact",
+    "polished_article": "Polished: This is a highly refined EV battery supply chain report.",
+    "peer_review": {
+      "confidence_scores": {
+        "perspectives": 8,
+        "contradictions": 8,
+        "synthesis": 8,
+        "article": 8
+      },
+      "overall_confidence": 8,
+      "bias_check": "No significant bias detected.",
+      "missing_perspectives": [],
+      "overall_grade": "A"
+    },
+    "metadata": {
+      "attempt": 1,
+      "timestamp": "2026-06-22T12:03:55.517984"
+    }
+  }
+}

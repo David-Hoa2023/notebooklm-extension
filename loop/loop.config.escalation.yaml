@@ -1,0 +1,6 @@
+items:
+- TSLA
+- BYD
+- RIVN
+max_iterations: 1
+state_file: STATE_escalation_test.yaml

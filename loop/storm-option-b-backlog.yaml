@@ -1,0 +1,751 @@
+# ==============================================================================
+# EPIC: STORM Option B + Nav Toor Multi-Perspective Verify Loop
+# ==============================================================================
+# Integrates Stanford STORM (knowledge-storm) as a stage-per-item executor inside
+# the existing Plan -> Execute -> Verify -> Repeat loop.
+#
+# Each research TOPIC expands into 6 sequential stages (passed stages stay locked):
+#   perspectives -> contradictions -> outline -> synthesis -> article -> peer_review
+#
+# Nav Toor's 4-prompt workflow is mapped onto STORM stages + verify gates:
+#   P1 Multi-Perspective Scan    -> perspectives stage (verify after STORM research)
+#   P2 Contradiction Map         -> contradictions stage (explicit artifact + verify)
+#   P3 Synthesis                 -> synthesis stage (briefing before full article)
+#   P4 Peer Review               -> peer_review stage (verify gate on polished report)
+#
+# Agent execution guide:
+#   - Tasks with the same depends_on AND parallel_group may run in parallel.
+#   - Tasks without parallel_group default to sequential within their phase.
+#   - Never start a stage verifier before its executor schema exists.
+#   - One topic's stages are strictly sequential; multiple topics may run in parallel
+#     at the SAME stage if orchestrator concurrency allows.
+# ==============================================================================
+
+schema_version: "1.0"
+
+meta:
+  epic_name: "STORM Option B: stage-per-item verify loop with Nav Toor perspectives"
+  status: "ready"
+  builds_on: "verify-gate-backlog.yaml"
+  reference_repos:
+    storm: "https://github.com/stanford-oval/storm"
+    loop: "loop/run.py"
+  integration_mode: "option_b_stage_per_item"
+  state_file: "STATE.yaml"
+  config_file: "loop.config.yaml"
+  termination:
+    success: "active_rejections == 0"
+    failure: "iteration >= max_iterations"
+    escalation: "human_in_the_loop"
+  defaults:
+    max_iterations: 8
+    max_attempts_per_item: 4
+    topic_concurrency: 2
+    stage_concurrency: 1
+    roles:
+      executor_swarm: "moonshotai/kimi-k2.6"
+      planner_verifier: "z-ai/glm-5.2"
+      storm_conv_simulator: "moonshotai/kimi-k2.6"
+      storm_question_asker: "moonshotai/kimi-k2.6"
+      storm_outline_gen: "z-ai/glm-5.2"
+      storm_article_gen: "z-ai/glm-5.2"
+      storm_polish: "z-ai/glm-5.2"
+      peer_reviewer: "z-ai/glm-5.2"
+    storm:
+      max_perspective: 5
+      max_conv_turn: 3
+      search_top_k: 3
+      retriever: "duckduckgo"
+    nav_toor:
+      required_perspectives:
+        - id: "practitioner"
+          label: "Practitioner"
+          focus: "Daily realities academics miss"
+        - id: "academic"
+          label: "Academic"
+          focus: "Peer-reviewed evidence vs popular belief"
+        - id: "skeptic"
+          label: "Skeptic"
+          focus: "Counterarguments proponents ignore"
+        - id: "economist"
+          label: "Economist"
+          focus: "Financial incentives shaping research"
+        - id: "historian"
+          label: "Historian"
+          focus: "Patterns from similar past cases"
+      contradiction_map_min_clashes: 3
+      synthesis_min_findings: 5
+      peer_review_min_confidence: 7
+
+# ------------------------------------------------------------------------------
+# Stage model: item_id = "{topic_slug}::{stage}"
+# ------------------------------------------------------------------------------
+stage_pipeline:
+  order:
+    - "perspectives"
+    - "contradictions"
+    - "outline"
+    - "synthesis"
+    - "article"
+    - "peer_review"
+  nav_toor_mapping:
+    perspectives:
+      prompt: "P1_multi_perspective_scan"
+      storm_flag: "do_research"
+      duration_target: "60s"
+    contradictions:
+      prompt: "P2_contradiction_map"
+      storm_flag: null
+      duration_target: "2m"
+    outline:
+      prompt: null
+      storm_flag: "do_generate_outline"
+      duration_target: null
+    synthesis:
+      prompt: "P3_synthesis"
+      storm_flag: null
+      duration_target: "1m"
+    article:
+      prompt: null
+      storm_flag: "do_generate_article"
+      duration_target: null
+    peer_review:
+      prompt: "P4_peer_review"
+      storm_flag: "do_polish_article"
+      duration_target: "60s"
+
+phases:
+  - id: "phase-0"
+    name: "Foundation and STORM adapter"
+    execution: "sequential"
+    tasks: ["STB-001", "STB-002", "STB-003"]
+  - id: "phase-1"
+    name: "Schemas, prompts, and citation feeds"
+    execution: "mixed"
+    tasks: ["STB-004", "STB-005", "STB-006", "STB-007"]
+  - id: "phase-2"
+    name: "Stage executors (STORM + Nav Toor)"
+    execution: "parallel_by_stage"
+    tasks: ["STB-010", "STB-011", "STB-012", "STB-013", "STB-014", "STB-015"]
+  - id: "phase-3"
+    name: "Stage pre-verifiers and verify gates"
+    execution: "parallel_by_stage"
+    tasks: ["STB-020", "STB-021", "STB-022", "STB-023", "STB-024", "STB-025"]
+  - id: "phase-4"
+    name: "Orchestrator integration and topic expansion"
+    execution: "sequential"
+    tasks: ["STB-030", "STB-031", "STB-032"]
+  - id: "phase-5"
+    name: "Mock fixtures, tests, and adversarial proofs"
+    execution: "parallel"
+    tasks: ["STB-040", "STB-041", "STB-042"]
+  - id: "phase-6"
+    name: "Operations, docs, and human-in-the-loop"
+    execution: "parallel"
+    tasks: ["STB-050", "STB-051", "STB-052"]
+
+artifacts:
+  item_id_pattern: "{topic_slug}::{stage}"
+  topic_slug_rules: "lowercase; spaces and slashes to underscore; max 64 chars"
+  per_topic_tree: "artifacts/raw/{run_id}/{topic_slug}/"
+  stage_files:
+    perspectives:
+      output: "conversation_log.json"
+      storm_sources: ["conversation_log.json", "raw_search_results.json", "url_to_info.json"]
+      normalized: "perspectives.json"
+    contradictions:
+      output: "contradiction_map.json"
+    outline:
+      output: "storm_gen_outline.txt"
+      normalized: "outline.json"
+    synthesis:
+      output: "research_briefing.json"
+    article:
+      output: "storm_gen_article.txt"
+      normalized: "article.json"
+    peer_review:
+      output: "storm_gen_article_polished.txt"
+      normalized: "final_report.json"
+      audit: "peer_review.json"
+  shared:
+    rejections: "artifacts/raw/{run_id}/{topic_slug}/rejections.json"
+    escalation: "artifacts/escalation/{run_id}.md"
+    final_bundle: "artifacts/final/{run_id}.json"
+
+backlog_items:
+
+  # ============================================================================
+  # PHASE 0 — Foundation (SEQUENTIAL: agents must complete in order)
+  # ============================================================================
+
+  - id: "STB-001"
+    title: "Add STORM dependency, config block, and package layout"
+    priority: "critical"
+    phase: "phase-0"
+    execution_mode: "sequential"
+    parallel_group: null
+    depends_on: []
+    agent_hints:
+      - "Do not modify existing ev_matrix mode behavior in loop/run.py."
+      - "Add requirements-storm.txt or optional extras in pyproject if present."
+      - "Use DuckDuckGo retriever first to avoid extra API keys."
+    steps:
+      - "Add knowledge-storm to requirements (pip install knowledge-storm)."
+      - "Extend loop.config.yaml with mode: storm_option_b, storm.*, nav_toor.*, topics: []."
+      - "Create loop/storm_adapter.py with build_storm_runner() using LitellmModel + OpenRouter."
+      - "Create loop/storm_paths.py helpers for topic_slug, stage paths, normalized artifact paths."
+      - "Document env vars: OPENROUTER_API_KEY, optional TAVILY_API_KEY, MOONSHOT_API_KEY."
+    acceptance_criteria:
+      - "python -c 'from loop.storm_adapter import build_storm_runner' succeeds after pip install."
+      - "loop.config.yaml validates with storm_option_b mode without breaking existing ev mode."
+      - "No hardcoded API keys."
+
+  - id: "STB-002"
+    title: "Extend STATE.yaml item model for composite stage item IDs"
+    priority: "critical"
+    phase: "phase-0"
+    execution_mode: "sequential"
+    depends_on: ["STB-001"]
+    agent_hints:
+      - "Item IDs look like ev_battery_supply_chain::perspectives — parse with rsplit('::', 1)."
+      - "Add optional fields: stage, topic_slug, upstream_artifacts (list of paths)."
+    steps:
+      - "Extend ItemState in loop/state.py with stage: str and topic_slug: str (optional)."
+      - "Add expand_topics_to_items(topics, stages) in loop/storm_paths.py."
+      - "Enforce stage dependency: contradictions requires perspectives passed for same topic_slug."
+      - "Update save_state/load_state tests for new optional fields (backward compatible)."
+    acceptance_criteria:
+      - "3 topics x 6 stages = 18 items generated with correct depends_on within topic."
+      - "Loading old STATE.yaml without stage fields still works."
+      - "Attempting outline before perspectives passed is blocked by orchestrator."
+
+  - id: "STB-003"
+    title: "Implement STORM stage runner with independent do_* flags"
+    priority: "critical"
+    phase: "phase-0"
+    execution_mode: "sequential"
+    depends_on: ["STB-002"]
+    agent_hints:
+      - "Reuse STORMWikiRunner.run() flags per stage; load prior outputs when resuming."
+      - "Output dir: artifacts/raw/{run_id}/{topic_slug}/."
+    steps:
+      - "Implement run_storm_stage(topic, stage, output_dir, config) in loop/storm_adapter.py."
+      - "Map stage -> do_research | do_generate_outline | do_generate_article | do_polish_article."
+      - "For Nav Toor-only stages (contradictions, synthesis), call executor LLM not STORM runner."
+      - "Return dict with artifact_paths, storm_metadata, token_usage estimate."
+      - "Support resume: skip stage if artifact exists and status passed unless force_retry."
+    acceptance_criteria:
+      - "run_storm_stage(topic, 'perspectives', ...) produces conversation_log.json."
+      - "run_storm_stage(topic, 'outline', ...) loads research outputs and produces storm_gen_outline.txt."
+      - "Calling article before outline raises clear dependency error."
+
+  # ============================================================================
+  # PHASE 1 — Schemas, prompts, feeds (MIXED: STB-004 first, then STB-005/006/007 parallel)
+  # ============================================================================
+
+  - id: "STB-004"
+    title: "Define Pydantic schemas for all six stage artifacts"
+    priority: "high"
+    phase: "phase-1"
+    execution_mode: "sequential"
+    depends_on: ["STB-003"]
+    agent_hints:
+      - "Create loop/storm_schema.py separate from pre_verify.py EV schema."
+      - "Each schema must support pre_verify_item_storm(stage, data, run_id, topic_slug)."
+    steps:
+      - "PerspectivesSchema: perspectives[5] with id, position, evidence, unique_insight, sources[]."
+      - "ContradictionMapSchema: clashes[], strongest_evidence, weakest_evidence, blind_spots[]."
+      - "OutlineSchema: hierarchical sections with required coverage tags."
+      - "SynthesisSchema: summary, key_findings[5+] ranked by reliability, hidden_connections[], actionable_insight."
+      - "ArticleSchema: sections[], citation_indices[], word_count_min."
+      - "PeerReviewSchema: confidence_scores, bias_check, missing_perspectives[], overall_grade."
+      - "Add normalizers: storm file -> JSON for each stage."
+    acceptance_criteria:
+      - "Invalid perspective count (<5) fails pre-verify with invalid_perspectives."
+      - "Synthesis with <5 key_findings fails pre-verify."
+      - "Article without citation markers fails pre-verify."
+
+  - id: "STB-005"
+    title: "Author Nav Toor prompt templates P1–P4"
+    priority: "high"
+    phase: "phase-1"
+    execution_mode: "parallel"
+    parallel_group: "prompts"
+    depends_on: ["STB-004"]
+    agent_hints:
+      - "Keep prompts in prompts/storm/ as markdown; no inline YAML blocks."
+      - "All executor prompts require JSON-only output matching stage schema."
+    steps:
+      - "Create prompts/storm/p1_multi_perspective_scan.md (5 perspectives, evidence, insight each)."
+      - "Create prompts/storm/p2_contradiction_map.md (clashes, strongest/weakest, blind spots)."
+      - "Create prompts/storm/p3_synthesis.md (summary, 5 ranked findings, connections, action)."
+      - "Create prompts/storm/p4_peer_review.md (confidence 1-10, bias, missing views, grade A-F)."
+      - "Each prompt references upstream artifact paths and forbids markdown fences in output."
+    acceptance_criteria:
+      - "Four prompt files exist and are referenced by stage executors."
+      - "P1 explicitly lists practitioner, academic, skeptic, economist, historian."
+      - "P4 output schema matches PeerReviewSchema fields."
+
+  - id: "STB-006"
+    title: "Extend feeds.py for citation URL resolution and snippet extraction"
+    priority: "high"
+    phase: "phase-1"
+    execution_mode: "parallel"
+    parallel_group: "prompts"
+    depends_on: ["STB-004"]
+    agent_hints:
+      - "Reuse urllib pattern from existing feeds.py; add caching per run_id."
+      - "Normalized shape: { url, status_code, title, excerpt, fetched_at }."
+    steps:
+      - "Add fetch_source_url(url) -> dict with HTTP status, redirect chain, excerpt (stdlib or trafilatura)."
+      - "Add batch_fetch_sources(urls, cache_dir) with rate limit and timeout."
+      - "Reject 404/500/timeout with structured error for verify gate."
+      - "Add unit tests with mocked urlopen (mirror TestFeeds pattern)."
+    acceptance_criteria:
+      - "Live fetch of https://finance.yahoo.com/quote/TSLA returns status 200 or graceful error."
+      - "Second fetch of same URL in same run_id hits cache."
+      - "404 URL returns status error without crashing orchestrator."
+
+  - id: "STB-007"
+    title: "Define stage-specific verify gate prompt templates"
+    priority: "high"
+    phase: "phase-1"
+    execution_mode: "parallel"
+    parallel_group: "prompts"
+    depends_on: ["STB-005"]
+    agent_hints:
+      - "Verifier prompts live in prompts/storm/verify_*.md."
+      - "Reuse extract_json and verifier_output_schema from existing loop."
+    steps:
+      - "Create prompts/storm/verify_perspectives.md — check 5 perspectives present and sourced."
+      - "Create prompts/storm/verify_contradictions.md — check >=3 genuine clashes, non-empty blind spots."
+      - "Create prompts/storm/verify_outline.md — sections cover all perspectives and contradictions."
+      - "Create prompts/storm/verify_synthesis.md — 5 findings ranked, actionable insight present."
+      - "Create prompts/storm/verify_article.md — claims supported by url_to_info snippets."
+      - "Create prompts/storm/verify_peer_review.md — adversarial final gate; fail on confidence <7."
+    acceptance_criteria:
+      - "Six verify prompt files exist, one per stage."
+      - "Each specifies JSON array output with item_id, status, rejection_reason, checks_failed."
+      - "verify_article includes live source excerpts from batch_fetch_sources."
+
+  # ============================================================================
+  # PHASE 2 — Stage executors (PARALLEL BY STAGE: independent agents per STB-01x)
+  # ============================================================================
+
+  - id: "STB-010"
+    title: "Executor: perspectives stage (STORM research + P1 enrichment)"
+    priority: "critical"
+    phase: "phase-2"
+    execution_mode: "parallel"
+    parallel_group: "executors"
+    depends_on: ["STB-003", "STB-005", "STB-006"]
+    nav_toor_prompt: "P1_multi_perspective_scan"
+    storm_stage: "perspectives"
+    steps:
+      - "Implement run_stage_perspectives(topic, attempt, rejection, config) in loop/storm_stages.py."
+      - "Call STORM do_research with max_perspective=5."
+      - "Post-process conversation_log.json into perspectives.json via P1 prompt if gaps detected."
+      - "Attach raw_search_results and url_to_info paths to artifact metadata."
+      - "On retry, append last_rejection to STORM conv simulator system prompt."
+    acceptance_criteria:
+      - "Produces perspectives.json with exactly 5 perspective entries for a smoke topic."
+      - "conversation_log.json and url_to_info.json co-located under topic directory."
+      - "Retry after verify failure re-runs research without deleting passed sibling stages."
+
+  - id: "STB-011"
+    title: "Executor: contradictions stage (Nav Toor P2)"
+    priority: "high"
+    phase: "phase-2"
+    execution_mode: "parallel"
+    parallel_group: "executors"
+    depends_on: ["STB-010", "STB-005"]
+    nav_toor_prompt: "P2_contradiction_map"
+    steps:
+      - "Implement run_stage_contradictions(topic, attempt, rejection, config)."
+      - "Load perspectives.json as sole upstream input."
+      - "Call executor_swarm with p2_contradiction_map.md; output contradiction_map.json."
+      - "Require >=3 clashes referencing perspective ids from upstream."
+    acceptance_criteria:
+      - "contradiction_map.json validates against ContradictionMapSchema."
+      - "Each clash references two distinct perspective ids."
+      - "Fails gracefully if perspectives.json missing."
+
+  - id: "STB-012"
+    title: "Executor: outline stage (STORM outline generation)"
+    priority: "high"
+    phase: "phase-2"
+    execution_mode: "parallel"
+    parallel_group: "executors"
+    depends_on: ["STB-011", "STB-003"]
+    storm_stage: "outline"
+    steps:
+      - "Implement run_stage_outline(topic, attempt, rejection, config)."
+      - "Call STORM do_generate_outline using research + contradiction_map as context."
+      - "Normalize storm_gen_outline.txt to outline.json with section ids."
+      - "Tag each section with perspective_coverage[] and contradiction_refs[]."
+    acceptance_criteria:
+      - "storm_gen_outline.txt and outline.json both written."
+      - "Outline has >=4 top-level sections for smoke topic."
+      - "Retry incorporates verifier feedback about missing perspective coverage."
+
+  - id: "STB-013"
+    title: "Executor: synthesis stage (Nav Toor P3)"
+    priority: "high"
+    phase: "phase-2"
+    execution_mode: "parallel"
+    parallel_group: "executors"
+    depends_on: ["STB-012", "STB-005"]
+    nav_toor_prompt: "P3_synthesis"
+    steps:
+      - "Implement run_stage_synthesis(topic, attempt, rejection, config)."
+      - "Load outline.json, contradiction_map.json, perspectives.json."
+      - "Generate research_briefing.json via p3_synthesis.md."
+      - "Rank key_findings by reliability score 1-10 with source refs."
+    acceptance_criteria:
+      - "research_briefing.json has >=5 key_findings with reliability scores."
+      - "actionable_insight field non-empty."
+      - "hidden_connections references at least 2 perspective ids."
+
+  - id: "STB-014"
+    title: "Executor: article stage (STORM article generation)"
+    priority: "high"
+    phase: "phase-2"
+    execution_mode: "parallel"
+    parallel_group: "executors"
+    depends_on: ["STB-013", "STB-003"]
+    storm_stage: "article"
+    steps:
+      - "Implement run_stage_article(topic, attempt, rejection, config)."
+      - "Call STORM do_generate_article using outline + url_to_info."
+      - "Normalize to article.json with per-section citation index lists."
+      - "Ensure every factual paragraph has at least one [N] citation."
+    acceptance_criteria:
+      - "storm_gen_article.txt generated with inline [1], [2] citations."
+      - "article.json citation indices resolve against url_to_info.json."
+      - "Retry fixes sections flagged in verify rejection without full article delete."
+
+  - id: "STB-015"
+    title: "Executor: peer_review stage (STORM polish + Nav Toor P4)"
+    priority: "critical"
+    phase: "phase-2"
+    execution_mode: "parallel"
+    parallel_group: "executors"
+    depends_on: ["STB-014", "STB-003", "STB-005"]
+    nav_toor_prompt: "P4_peer_review"
+    storm_stage: "peer_review"
+    steps:
+      - "Implement run_stage_peer_review(topic, attempt, rejection, config)."
+      - "Call STORM do_polish_article -> storm_gen_article_polished.txt."
+      - "Run P4 peer review LLM pass -> peer_review.json."
+      - "Bundle final_report.json: polished article + peer_review + metadata."
+    acceptance_criteria:
+      - "storm_gen_article_polished.txt exists."
+      - "peer_review.json includes overall_grade and per-section confidence 1-10."
+      - "final_report.json is valid JSON export suitable for artifacts/final/{run_id}.json merge."
+
+  # ============================================================================
+  # PHASE 3 — Pre-verifiers and verify gates (PARALLEL BY STAGE: STB-02x)
+  # ============================================================================
+
+  - id: "STB-020"
+    title: "Pre-verify + verify gate: perspectives stage"
+    priority: "critical"
+    phase: "phase-3"
+    execution_mode: "parallel"
+    parallel_group: "verifiers"
+    depends_on: ["STB-010", "STB-007"]
+    steps:
+      - "Add pre_verify_storm_stage('perspectives', data) in loop/storm_pre_verify.py."
+      - "Add run_storm_verifier(stage='perspectives') using verify_perspectives.md."
+      - "Deterministic check: 5 required perspective ids present."
+      - "LLM check: each perspective cites at least one url from url_to_info."
+      - "Log failures to rejections.json via log_rejection_history."
+    acceptance_criteria:
+      - "Missing skeptic perspective fails with checks_failed: [missing_perspective]."
+      - "Perspective with empty evidence fails pre-verify."
+      - "Mock fixture: 4 perspectives fails; 5 passes."
+
+  - id: "STB-021"
+    title: "Pre-verify + verify gate: contradictions stage"
+    priority: "high"
+    phase: "phase-3"
+    execution_mode: "parallel"
+    parallel_group: "verifiers"
+    depends_on: ["STB-011", "STB-007"]
+    steps:
+      - "Pre-verify: >=3 clashes, blind_spots non-empty, strongest/weakest evidence fields set."
+      - "LLM verify with verify_contradictions.md and perspectives.json context."
+      - "Reject if clashes are trivial duplicates of same perspective."
+    acceptance_criteria:
+      - "2 clashes fails; 3 valid clashes passes."
+      - "Clash referencing unknown perspective id fails."
+      - "Verifier returns stock_price_mismatch-style structured JSON."
+
+  - id: "STB-022"
+    title: "Pre-verify + verify gate: outline stage"
+    priority: "high"
+    phase: "phase-3"
+    execution_mode: "parallel"
+    parallel_group: "verifiers"
+    depends_on: ["STB-012", "STB-007"]
+    steps:
+      - "Pre-verify: outline depth >=2, all 5 perspective tags appear in coverage metadata."
+      - "LLM verify outline covers contradiction_map clash topics."
+      - "Reject outline that omits economist or historian without justification."
+    acceptance_criteria:
+      - "Outline missing historian coverage fails verify gate."
+      - "Valid outline passes with empty checks_failed."
+      - "Rejection reason cites specific missing section."
+
+  - id: "STB-023"
+    title: "Pre-verify + verify gate: synthesis stage"
+    priority: "high"
+    phase: "phase-3"
+    execution_mode: "parallel"
+    parallel_group: "verifiers"
+    depends_on: ["STB-013", "STB-007"]
+    steps:
+      - "Pre-verify: 5 key_findings, reliability scores 1-10, actionable_insight present."
+      - "LLM verify findings align with outline sections and contradiction_map."
+      - "Reject if top finding contradicts url_to_info without acknowledging tension."
+    acceptance_criteria:
+      - "4 findings fails pre-verify."
+      - "Finding without source ref fails."
+      - "Valid synthesis passes verify gate."
+
+  - id: "STB-024"
+    title: "Pre-verify + verify gate: article stage (citation adversarial)"
+    priority: "critical"
+    phase: "phase-3"
+    execution_mode: "parallel"
+    parallel_group: "verifiers"
+    depends_on: ["STB-014", "STB-006", "STB-007"]
+    steps:
+      - "Pre-verify: every [N] index exists in url_to_info; min word count met."
+      - "Deterministic: batch_fetch_sources on all citation URLs."
+      - "LLM verify: spot-check 3 random claims vs fetched excerpts."
+      - "Support INJECT_BAD_CITATION=1 test hook (404 URL in article)."
+    acceptance_criteria:
+      - "Dead citation URL fails with checks_failed: [citation_unreachable]."
+      - "Claim contradicting snippet fails LLM verify."
+      - "INJECT_BAD_CITATION caught on first iteration."
+
+  - id: "STB-025"
+    title: "Pre-verify + verify gate: peer_review stage (Nav Toor P4 final gate)"
+    priority: "critical"
+    phase: "phase-3"
+    execution_mode: "parallel"
+    parallel_group: "verifiers"
+    depends_on: ["STB-015", "STB-007"]
+    steps:
+      - "Pre-verify: peer_review.json schema, overall_grade present, confidence scores 1-10."
+      - "LLM adversarial verify with verify_peer_review.md — fail if overall confidence <7."
+      - "Cross-check missing_perspectives against nav_toor.required_perspectives."
+      - "Passing this stage marks topic peer_review item passed; enables final bundle merge."
+    acceptance_criteria:
+      - "Grade B with confidence 6 fails; confidence 8 passes."
+      - "Peer review listing 0 missing perspectives when historian absent fails."
+      - "Passed peer_review locks; retry only re-runs peer_review and article if needed."
+
+  # ============================================================================
+  # PHASE 4 — Orchestrator (SEQUENTIAL)
+  # ============================================================================
+
+  - id: "STB-030"
+    title: "Wire storm_option_b mode into loop/run.py orchestrator"
+    priority: "critical"
+    phase: "phase-4"
+    execution_mode: "sequential"
+    depends_on: ["STB-015", "STB-025"]
+    agent_hints:
+      - "Branch on config.mode: ev_matrix | storm_option_b."
+      - "Preserve existing --mock path for ev_matrix regression."
+    steps:
+      - "Add expand_topics_to_stage_items(config.topics) at run startup."
+      - "Route execute phase to run_storm_stage() by parsed stage name."
+      - "Route pre-verify to pre_verify_storm_stage(); verify to run_storm_verifier()."
+      - "Enforce within-topic stage order; allow parallel topics via topic_concurrency."
+      - "Merge all topic final_report.json into artifacts/final/{run_id}.json on success."
+    acceptance_criteria:
+      - "python -m loop.run --config loop.config.yaml runs 1 topic through 6 stages."
+      - "Passed perspectives stage is not re-executed when article retries."
+      - "STATE.yaml item keys use topic_slug::stage format."
+
+  - id: "STB-031"
+    title: "Stage-aware rejection routing and retry feedback"
+    priority: "high"
+    phase: "phase-4"
+    execution_mode: "sequential"
+    depends_on: ["STB-030"]
+    steps:
+      - "Append stage-specific rejection context to executor prompts on retry."
+      - "On article verify fail, do not reset outline/synthesis passed status."
+      - "On perspectives fail, cascade-reset downstream stages for same topic to pending."
+      - "Extend rejections.json entries with stage and topic_slug fields."
+    acceptance_criteria:
+      - "Article retry receives prior verify rejection verbatim."
+      - "Perspectives re-run clears contradictions..peer_review for same topic only."
+      - "rejections.json searchable by stage filter."
+
+  - id: "STB-032"
+    title: "Final bundle, escalation, and resume for multi-stage topics"
+    priority: "high"
+    phase: "phase-4"
+    execution_mode: "sequential"
+    depends_on: ["STB-031"]
+    steps:
+      - "On all items passed: merge final_report.json per topic into artifacts/final/{run_id}.json."
+      - "Escalation report groups failures by topic_slug and stage."
+      - "Resume extends max_iterations and preserves passed stage items."
+      - "Human override in STATE.yaml per stage with override_reason audit field."
+    acceptance_criteria:
+      - "Escalation at iteration cap lists BYD-style multi-attempt stage failures."
+      - "Resume continues from verify_failed stage without redoing passed stages."
+      - "Final bundle contains 3 topics x polished report when 3 topics configured."
+
+  # ============================================================================
+  # PHASE 5 — Tests and adversarial proofs (PARALLEL)
+  # ============================================================================
+
+  - id: "STB-040"
+    title: "Mock fixture: 1 topic, 6 stages, deterministic fail-pass cycle"
+    priority: "high"
+    phase: "phase-5"
+    execution_mode: "parallel"
+    parallel_group: "tests"
+    depends_on: ["STB-030"]
+    steps:
+      - "Add loop/storm_mock.py with canned artifacts per stage (no API keys)."
+      - "Add --mock-storm CLI flag mirroring --mock for ev_matrix."
+      - "Fixture topic: test_ev_battery_supply_chain — perspectives fail once then pass."
+      - "Assert iteration count, rejections.json entries, final bundle shape."
+    acceptance_criteria:
+      - "python -m loop.run --mock-storm completes with active_rejections=0."
+      - "Runs in under 30 seconds with no network."
+      - "At least one staged retry occurs before success."
+
+  - id: "STB-041"
+    title: "Unit tests: storm_schema, storm_paths, extract_json, fetch_source_url"
+    priority: "medium"
+    phase: "phase-5"
+    execution_mode: "parallel"
+    parallel_group: "tests"
+    depends_on: ["STB-004", "STB-006"]
+    steps:
+      - "Extend loop/tests.py with TestStormSchema, TestStormPaths, TestSourceFetch."
+      - "Test item_id parsing topic_slug::stage round-trip."
+      - "Test extract_json on STORM-style conversational outputs."
+      - "Target: >=20 total tests, all pass via python -m unittest loop.tests."
+    acceptance_criteria:
+      - "python -m unittest loop.tests reports OK with >=20 tests."
+      - "No network required for unit tests."
+
+  - id: "STB-042"
+    title: "Adversarial integration: INJECT_BAD_CITATION and scoped wrong-perspective"
+    priority: "high"
+    phase: "phase-5"
+    execution_mode: "parallel"
+    parallel_group: "tests"
+    depends_on: ["STB-024", "STB-030"]
+    steps:
+      - "INJECT_BAD_CITATION=1 injects dead URL into article stage attempt 0 only."
+      - "INJECT_MISSING_PERSPECTIVE=historian drops historian from perspectives attempt 0."
+      - "Document adversarial env vars in walkthrough.md."
+      - "Verify GLM/peer reviewer catches both and self-corrects on retry."
+    acceptance_criteria:
+      - "Bad citation caught at article verify; passes after retry."
+      - "Missing historian caught at perspectives verify; passes after retry."
+      - "Injection scoped to attempt 0 and named stage only (not global)."
+
+  # ============================================================================
+  # PHASE 6 — Ops and docs (PARALLEL)
+  # ============================================================================
+
+  - id: "STB-050"
+    title: "Token budget, structured logs, and stage latency metrics"
+    priority: "medium"
+    phase: "phase-6"
+    execution_mode: "parallel"
+    parallel_group: "ops"
+    depends_on: ["STB-030"]
+    steps:
+      - "Log per stage: topic_slug, stage, latency_ms, tokens_in, tokens_out, pass/fail."
+      - "Accumulate STORM rm query counts from runner.summary()."
+      - "Optional config token_budget_usd hard stop with escalated status."
+      - "Write artifacts/raw/{run_id}/run_metrics.json at termination."
+    acceptance_criteria:
+      - "run_metrics.json breaks down cost by stage."
+      - "Token budget exceeded triggers escalation with clear reason."
+      - "Logs sufficient to reconstruct BYD-style 4-attempt timeline."
+
+  - id: "STB-051"
+    title: "Documentation: storm walkthrough and agent onboarding"
+    priority: "medium"
+    phase: "phase-6"
+    execution_mode: "parallel"
+    parallel_group: "ops"
+    depends_on: ["STB-040"]
+    steps:
+      - "Create storm-walkthrough.md with Option B diagram, stage table, Nav Toor mapping."
+      - "Document example loop.config.yaml for storm_option_b mode."
+      - "Include run IDs, adversarial test commands, sample rejections.json."
+      - "Sync artifacts/walkthrough.md copy per project convention."
+    acceptance_criteria:
+      - "New agent can run --mock-storm from docs alone."
+      - "Nav Toor 4 prompts mapped to stages with file paths."
+      - "Parallel vs sequential agent rules documented."
+
+  - id: "STB-052"
+    title: "Example topics config and Co-STORM future hook"
+    priority: "low"
+    phase: "phase-6"
+    execution_mode: "parallel"
+    parallel_group: "ops"
+    depends_on: ["STB-051"]
+    steps:
+      - "Add loop.config.storm.example.yaml with 3 EV research topics."
+      - "Stub loop/costorm_hook.py with NotImplemented and TSK reference for HITL."
+      - "Note Co-STORM as upgrade path for TSK-007 human steering mid-research."
+    acceptance_criteria:
+      - "Example config runs with topic list only (no code changes)."
+      - "costorm_hook.py documents interface without breaking imports."
+
+# ------------------------------------------------------------------------------
+# Agent parallelization matrix (quick reference)
+# ------------------------------------------------------------------------------
+agent_parallelization:
+  sequential_chains:
+    - ["STB-001", "STB-002", "STB-003"]
+    - ["STB-004", "STB-030", "STB-031", "STB-032"]
+  parallel_groups:
+    prompts: ["STB-005", "STB-006", "STB-007"]
+    executors: ["STB-010", "STB-011", "STB-012", "STB-013", "STB-014", "STB-015"]
+    verifiers: ["STB-020", "STB-021", "STB-022", "STB-023", "STB-024", "STB-025"]
+    tests: ["STB-040", "STB-041", "STB-042"]
+    ops: ["STB-050", "STB-051", "STB-052"]
+  notes:
+    - "Executors STB-010..015 can run in parallel ONLY if different agents own different stages; each stage still depends on prior stage completion at runtime."
+    - "Verifiers STB-020..025 depend on matching executor STB-01x — schedule verifier agent after executor merges."
+    - "Multiple topics at the same stage can run in parallel when topic_concurrency > 1."
+    - "Do not parallelize STB-030 until all STB-01x and STB-02x are merged."
+
+example_config_snippet: |
+  mode: storm_option_b
+  max_iterations: 8
+  topic_concurrency: 2
+  topics:
+    - "EV battery supply chain 2026"
+    - "Solid-state battery commercialization"
+    - "Chinese EV export tariffs impact"
+  storm:
+    max_perspective: 5
+    max_conv_turn: 3
+    search_top_k: 3
+    retriever: duckduckgo
+  nav_toor:
+    contradiction_map_min_clashes: 3
+    synthesis_min_findings: 5
+    peer_review_min_confidence: 7
+  roles:
+    executor_swarm: moonshotai/kimi-k2.6
+    planner_verifier: z-ai/glm-5.2

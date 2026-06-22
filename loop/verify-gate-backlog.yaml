@@ -1,0 +1,237 @@
+# ==============================================================================
+# EPIC: Autonomous Self-Verifying Loop & Verify Gate
+# ==============================================================================
+# Four-stage loop: Plan -> Execute -> Verify -> Repeat
+#
+# Reference implementation in this repo: tikz_agent_demo.py
+#   - Execute: LLM generates artifact
+#   - Verify: deterministic gate (pdflatex compile)
+#   - Repeat: feed compiler errors back until PASS or MAX_ITERATIONS
+#
+# This backlog generalizes that pattern for multi-item, live-data-backed
+# verification with a deterministic pre-gate plus an LLM adversarial gate.
+# ==============================================================================
+
+schema_version: "1.1"
+
+meta:
+  epic_name: "The self-verifying loop: autonomous verify gate"
+  status: "draft"
+  reference_implementation: "tikz_agent_demo.py"
+  example_domain: "EV-market comparison matrix (100 companies)"
+  state_file: "STATE.yaml"
+  termination:
+    success: "active_rejections == 0"
+    failure: "iteration >= max_iterations"
+    escalation: "human_in_the_loop"
+  defaults:
+    max_iterations: 5
+    batch_size: 100
+    roles:
+      planner_verifier: "anthropic/claude-opus-4"   # configurable via env
+      executor_swarm: "moonshot/kimi-k2"            # configurable via env
+      pre_verifier: "none (deterministic Python)"
+
+phases:
+  - id: "phase-0"
+    name: "Foundation"
+    tasks: ["TSK-000", "TSK-001"]
+  - id: "phase-1"
+    name: "Verification infrastructure"
+    tasks: ["TSK-002", "TSK-003"]
+  - id: "phase-2"
+    name: "Loop orchestration"
+    tasks: ["TSK-004", "TSK-005"]
+  - id: "phase-3"
+    name: "Operations & hardening"
+    tasks: ["TSK-006", "TSK-007"]
+
+artifacts:
+  state_schema:
+    path: "STATE.yaml"
+    fields:
+      run_id: "uuid"
+      iteration: "int (starts at 1)"
+      max_iterations: "int"
+      items_total: "int"
+      items_passed: "int"
+      active_rejections: "int"
+      status: "enum: running | passed | failed | escalated"
+      items:
+        description: "map keyed by item_id"
+        per_item:
+          status: "enum: pending | executing | pre_failed | verify_failed | passed"
+          attempts: "int"
+          last_rejection: "string | null"
+          artifact_path: "string | null"
+          verified_at: "iso8601 | null"
+  verifier_output_schema:
+    type: "array"
+    item_fields:
+      item_id: "string"
+      status: "enum: PASS | FAIL"
+      rejection_reason: "string | null"
+      checks_failed: "string[]"
+
+backlog_items:
+  - id: "TSK-000"
+    title: "Define loop orchestrator and STATE.yaml contract"
+    priority: "critical"
+    phase: "phase-0"
+    depends_on: []
+    description: >
+      Implement the top-level state machine that drives Plan -> Execute -> Verify -> Repeat.
+      Mirror the control flow in tikz_agent_demo.generate_tikz_loop but for many items and
+      external state instead of in-memory messages only.
+    steps:
+      - "Create STATE.yaml read/write helpers with atomic updates (write temp + rename)."
+      - "Implement loop driver: load state, run one iteration, update counters, persist."
+      - "Expose CLI entrypoint: python -m loop.run --config loop.config.yaml"
+      - "Log each phase transition with run_id, iteration, and item counts."
+    acceptance_criteria:
+      - "A dry-run iteration updates STATE.yaml without calling external APIs."
+      - "Restarting the process resumes from the last persisted iteration and item statuses."
+      - "When max_iterations is exceeded, status becomes escalated and the loop stops."
+
+  - id: "TSK-001"
+    title: "Define target schema, artifacts, and deterministic pre-verifier"
+    priority: "high"
+    phase: "phase-0"
+    depends_on: ["TSK-000"]
+    description: >
+      Establish the execution artifact schema and a cheap deterministic pre-gate that rejects
+      malformed or obviously stale output before any LLM verify call.
+    steps:
+      - "Create a strict JSON schema (Pydantic) for dataset rows: company_name, revenue, margin, source_url, metrics."
+      - "Validate types, required fields, URL format, and numeric ranges."
+      - "Flag sentinel values: empty, null, N/A, 0.0, TBD, placeholder URLs."
+      - "Store raw executor outputs in artifacts/raw/{run_id}/{item_id}.json pending verification."
+      - "Pre-verifier returns structured failures matching verifier_output_schema without LLM cost."
+    acceptance_criteria:
+      - "Invalid artifacts fail pre-verify with actionable reasons and never reach the LLM gate."
+      - "Valid artifacts proceed to live-feed verification with item status pre_failed -> verify_failed or passed."
+      - "Pre-verify handles a batch of 100 items in under 2 seconds on a laptop."
+
+  - id: "TSK-002"
+    title: "Implement live data connectors and MCP tool surface"
+    priority: "critical"
+    phase: "phase-1"
+    depends_on: ["TSK-001"]
+    description: >
+      Build programmatic connectors exposed as MCP tools so the verifier can fetch live
+      ground truth instead of relying on model training data.
+    feeds:
+      - id: "binance"
+        purpose: "Live crypto/stablecoin conversions and asset values"
+      - id: "yahoo_finance"
+        purpose: "Market caps, revenue multiples, ticker history"
+      - id: "world_bank"
+        purpose: "Regional economic index claims"
+      - id: "imf"
+        purpose: "Macro indicators and regional data points"
+      - id: "source_url_fetch"
+        purpose: "Resolve and inspect executor-attached source URLs (Playwright or fetch + readability)"
+    steps:
+      - "Wrap each feed behind a single MCP tool with normalized response shape: { value, unit, as_of, source, raw_ref }."
+      - "Add rate limiting, retries with backoff, and timeout per feed."
+      - "Implement Playwright (or httpx + trafilatura) fetcher: HTTP status, redirect chain, extracted main text."
+      - "Cache feed responses per run_id + query hash to avoid duplicate API calls within an iteration."
+      - "Document required API keys in .env.example; never hardcode secrets."
+    acceptance_criteria:
+      - "Verifier can invoke any feed by item field and receive normalized live data."
+      - "404/500/timeout on source_url_fetch yields FAIL with explicit rejection_reason."
+      - "Feed failures degrade gracefully: item marked verify_failed with reason, loop continues for other items."
+
+  - id: "TSK-003"
+    title: "Develop adversarial LLM verify gate prompt and orchestration"
+    priority: "critical"
+    phase: "phase-1"
+    depends_on: ["TSK-002"]
+    description: >
+      Create the Opus-class verifier agent that cross-checks pre-validated artifacts against
+      live feed snapshots. Fail fast on any mismatch.
+    prompt_template: "prompts/verify_gate_system.md"
+    verification_checklist:
+      - "Numeric claims match live source within configured tolerance (default: exact for revenue, 1% for derived metrics)."
+      - "source_url resolves and page content supports the claim."
+      - "No stale, blank, or placeholder metrics."
+      - "Every required field populated for every item in the batch."
+    steps:
+      - "Draft system prompt in prompts/verify_gate_system.md (keep markdown out of this YAML file)."
+      - "Require structured JSON array output conforming to verifier_output_schema; reject free-text-only responses."
+      - "Pass live feed snapshots and artifact excerpts in the user message; do not rely on tool use mid-generation unless needed."
+      - "Add JSON schema validation on verifier output; retry once on malformed JSON, then mark run as verify_failed."
+    acceptance_criteria:
+      - "Verifier returns PASS only when all checklist items pass for every row."
+      - "Injected wrong revenue or dead URL is caught with item-level rejection_reason."
+      - "Malformed verifier JSON triggers one retry then a structured orchestrator error."
+
+  - id: "TSK-004"
+    title: "Build rejection routing and parallel retry circuit"
+    priority: "high"
+    phase: "phase-2"
+    depends_on: ["TSK-003"]
+    description: >
+      Route failed items back to the executor swarm with rejection context while passed items
+      stay locked. Avoid restarting the full batch on partial failure.
+    steps:
+      - "Parse verifier JSON; partition items into passed (immutable) and failed (re-queue)."
+      - "Append rejection_reason and failed checks to the executor prompt for each retried item only."
+      - "Use a work queue (asyncio or external queue) for parallel executor agents with concurrency cap."
+      - "Increment per-item attempts; stop retrying an item after max_attempts_per_item (default: 3)."
+      - "Update STATE.yaml after each batch completes verify, not after each single item."
+    acceptance_criteria:
+      - "Executor receives exact prior rejection feedback on retry."
+      - "Passed items are never re-executed in later iterations."
+      - "100-item run with 10 failures retries only those 10 without losing state for the 90 passed."
+
+  - id: "TSK-005"
+    title: "Implement loop termination and memory consolidation"
+    priority: "medium"
+    phase: "phase-2"
+    depends_on: ["TSK-004"]
+    description: >
+      Terminate on zero active rejections, escalate on iteration cap, and distill durable
+      guidelines from the run for future loops.
+    steps:
+      - "After each verify round, set active_rejections = count(items where status != passed)."
+      - "If active_rejections == 0: set status passed, write artifacts/final/{run_id}.json."
+      - "If iteration >= max_iterations and active_rejections > 0: set status escalated, write escalation report."
+      - "On success, append a memory/distilled_guidelines.md entry: what failed early, what patterns worked."
+    acceptance_criteria:
+      - "Loop terminates only when all items are passed or escalation triggers."
+      - "Final artifact is a single validated JSON export of all passed rows."
+      - "Escalation report lists remaining failures with last rejection_reason per item."
+
+  - id: "TSK-006"
+    title: "Add observability, cost controls, and test harness"
+    priority: "medium"
+    phase: "phase-3"
+    depends_on: ["TSK-005"]
+    description: >
+      Make the loop operable in production: metrics, token budgets, and repeatable tests.
+    steps:
+      - "Emit structured logs: phase, iteration, item_id, latency_ms, tokens_used, pass/fail."
+      - "Track cumulative token spend per run; optional hard stop when budget exceeded."
+      - "Add integration test with mocked feeds and a 3-item fixture that cycles fail -> pass."
+      - "Add unit tests for pre-verifier, STATE transitions, and verifier JSON parsing."
+    acceptance_criteria:
+      - "One command runs the fixture test end-to-end without live API keys."
+      - "Logs allow reconstructing why any item failed across iterations."
+      - "Token budget cap stops the loop with status escalated and a clear reason."
+
+  - id: "TSK-007"
+    title: "Human-in-the-loop escalation and resume workflow"
+    priority: "low"
+    phase: "phase-3"
+    depends_on: ["TSK-005"]
+    description: >
+      Define how a human unblocks escalated runs without corrupting verified items.
+    steps:
+      - "Generate escalation report: artifacts/escalation/{run_id}.md with failures and suggested fixes."
+      - "Support manual override: human marks item passed with override_reason in STATE.yaml."
+      - "Support resume: python -m loop.run --resume --run-id <id> continues from escalated state."
+      - "Audit log all human overrides separately from automated passes."
+    acceptance_criteria:
+      - "Escalated run can resume after human fixes without re-verifying already passed items."
+      - "Every human override is recorded with timestamp, actor, and reason."
