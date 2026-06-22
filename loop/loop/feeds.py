@@ -120,7 +120,8 @@ def fetch_source_url(url: str, cache_dir: str = None) -> dict:
             "status_code": 200,
             "title": f"Reference Page: {url.split('//')[-1].split('/')[0]}",
             "excerpt": mock_excerpt,
-            "fetched_at": datetime.now().isoformat()
+            "fetched_at": datetime.now().isoformat(),
+            "excerpt_source": "mock"
         }
     if cache_dir:
         os.makedirs(cache_dir, exist_ok=True)
@@ -177,6 +178,7 @@ def fetch_source_url(url: str, cache_dir: str = None) -> dict:
                 if mock_excerpt:
                     result["title"] = f"Dictionary Definition of {mock_excerpt.split(':')[0].capitalize()}"
                     result["excerpt"] = mock_excerpt
+                    result["excerpt_source"] = "mock"
                 else:
                     result["title"] = "Reference Page (Anti-Scrape)"
                     result["excerpt"] = "Legitimate reference page. Accessible to users but blocks automated scraping with 403."

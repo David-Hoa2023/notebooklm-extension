@@ -15,6 +15,7 @@ class ItemState(BaseModel):
     topic_slug: Optional[str] = None
     depends_on: list[str] = Field(default_factory=list)
     override_reason: Optional[str] = None
+    regen_hint: Optional[str] = None
 
 class LoopState(BaseModel):
     run_id: str

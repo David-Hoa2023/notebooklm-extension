@@ -573,7 +573,10 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                     elif stage == "synthesis":
                         res = run_stage_synthesis(topic_name, attempt, item_state.last_rejection, config)
                     elif stage == "article":
-                        res = run_stage_article(topic_name, attempt, item_state.last_rejection, config)
+                        stage_config = config.copy()
+                        if getattr(item_state, "regen_hint", None):
+                            stage_config["regen_hint"] = item_state.regen_hint
+                        res = run_stage_article(topic_name, attempt, item_state.last_rejection, stage_config)
                     elif stage == "peer_review":
                         res = run_stage_peer_review(topic_name, attempt, item_state.last_rejection, config)
                     
@@ -619,6 +622,13 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                     state.run_id, item_id, attempt, "execution_phase", res["error"],
                     stage=item_state.stage, topic_slug=item_state.topic_slug
                 )
+                from loop.storm_fidelity import get_fidelity_config
+                fidelity_cfg = get_fidelity_config(config)
+                max_attempts = fidelity_cfg.get("article_max_attempts_before_escalate", 10)
+                if is_storm_mode and item_state.stage == "article" and item_state.attempts >= max_attempts:
+                    print(f"🚨 Article stage item {item_id} hit max attempts ({max_attempts}) during execution. Escalating.")
+                    item_state.status = "escalated"
+                    item_state.last_rejection = f"semantic_drift_exhausted: hit max attempts ({max_attempts}) during execution"
             else:
                 raw_data = res["raw_data"]
                 print(f"🧪 [Pre-Verify Phase] Checking schema for {item_id}...")
@@ -639,6 +649,13 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                         state.run_id, item_id, attempt, "pre_verify", reason,
                         stage=item_state.stage, topic_slug=item_state.topic_slug
                     )
+                    from loop.storm_fidelity import get_fidelity_config
+                    fidelity_cfg = get_fidelity_config(config)
+                    max_attempts = fidelity_cfg.get("article_max_attempts_before_escalate", 10)
+                    if is_storm_mode and item_state.stage == "article" and item_state.attempts >= max_attempts:
+                        print(f"🚨 Article stage item {item_id} hit max attempts ({max_attempts}) during pre-verification. Escalating.")
+                        item_state.status = "escalated"
+                        item_state.last_rejection = f"semantic_drift_exhausted: hit max attempts ({max_attempts}) during pre-verification"
                 else:
                     print(f"✅ Pre-verification PASSED for {item_id}")
                     item_state.status = "executing"
@@ -716,6 +733,8 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                     item_state.status = "passed"
                     item_state.last_rejection = None
                     item_state.verified_at = datetime.now().isoformat()
+                    if hasattr(item_state, "regen_hint"):
+                        item_state.regen_hint = None
                 else:
                     print(f"❌ Verification FAILED for {item_id}: {reason}")
                     item_state.status = "verify_failed"
@@ -725,6 +744,19 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                         state.run_id, item_id, attempt, "verify_gate", reason,
                         stage=item_state.stage, topic_slug=item_state.topic_slug
                     )
+                    
+                    # UCF-040: Route semantic article failures to briefing-first regen
+                    if is_storm_mode and item_state.stage == "article":
+                        semantic_keys = {
+                            "missing_perspective_in_article",
+                            "low_upstream_citation_ratio",
+                            "blocked_citation_domain",
+                            "semantic_drift",
+                            "contradictions_not_reflected"
+                        }
+                        if any(ck in semantic_keys for ck in (checks_failed or [])):
+                            item_state.regen_hint = "briefing_first"
+                            
                     # Cascade reset if perspectives fail
                     if is_storm_mode and item_state.stage == "perspectives":
                         print(f"🔄 Cascade resetting downstream stages for topic {item_state.topic_slug}")
@@ -735,6 +767,15 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                                 state.items[ds_id].attempts = 0
                                 state.items[ds_id].last_rejection = None
                                 
+            # UCF-041: Per-stage attempt cap and early escalation
+            from loop.storm_fidelity import get_fidelity_config
+            fidelity_cfg = get_fidelity_config(config)
+            max_attempts = fidelity_cfg.get("article_max_attempts_before_escalate", 10)
+            if is_storm_mode and item_state.stage == "article" and item_state.attempts >= max_attempts:
+                print(f"🚨 Article stage item {item_id} hit max attempts ({max_attempts}). Escalating.")
+                item_state.status = "escalated"
+                item_state.last_rejection = f"semantic_drift_exhausted: hit max attempts ({max_attempts})"
+                                
         # Update metrics
         passed_count = sum(1 for item in state.items.values() if item.status == "passed")
         state.items_passed = passed_count
@@ -743,7 +784,12 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
         print(f"📉 Active Rejections: {state.active_rejections}/{state.items_total}")
         
         # 4. Termination Check
-        if state.active_rejections == 0:
+        has_escalated = any(item.status == "escalated" for item in state.items.values())
+        if has_escalated:
+            state.status = "escalated"
+            print("🛑 Immediate escalation due to stage item escalation (max attempts reached).")
+            write_escalation_report(state, state_file, is_storm=is_storm_mode)
+        elif state.active_rejections == 0:
             state.status = "passed"
             print("🏁 Loop completed successfully! All items passed verification.")
             
@@ -762,6 +808,70 @@ def run_orchestrator(config_path: str, run_mock: bool, resume_run_id: str = None
                         if os.path.exists(rep_path):
                             with open(rep_path, "r", encoding="utf-8") as f:
                                 final_data[item_state.topic_slug] = json.load(f)
+                                
+                # Inject fidelity metadata block
+                for topic_slug, topic_data in final_data.items():
+                    out_dir = os.path.join("artifacts", "raw", state.run_id, topic_slug).replace("\\", "/")
+                    article_path = os.path.join(out_dir, "article.json").replace("\\", "/")
+                    
+                    ratio = 0.0
+                    covered = []
+                    mock_fetch_count = 0
+                    
+                    if os.path.exists(article_path):
+                        try:
+                            with open(article_path, "r", encoding="utf-8") as f:
+                                article_json = json.load(f)
+                                
+                            from loop.storm_fidelity import (
+                                citation_upstream_ratio, 
+                                build_allowed_citation_urls, 
+                                extract_article_text, 
+                                count_perspective_mentions
+                            )
+                            allowed_urls = build_allowed_citation_urls(out_dir)
+                            citations = article_json.get("citation_references", {})
+                            ratio = citation_upstream_ratio(citations, allowed_urls)
+                            
+                            article_text = extract_article_text(article_json)
+                            nav_toor = config.get("nav_toor", {})
+                            required_list = nav_toor.get("required_perspectives", [])
+                            required = [p for p in required_list] if required_list else [
+                                {"id": "practitioner", "label": "Practitioner"},
+                                {"id": "academic", "label": "Academic"},
+                                {"id": "skeptic", "label": "Skeptic"},
+                                {"id": "economist", "label": "Economist"},
+                                {"id": "historian", "label": "Historian"}
+                            ]
+                            mentions = count_perspective_mentions(article_text, required)
+                            covered = [p_id for p_id, count in mentions.items() if count > 0]
+                            
+                            import hashlib
+                            cache_dir = os.path.join("artifacts", "cache", state.run_id).replace("\\", "/")
+                            if os.path.exists(cache_dir):
+                                for key, url in citations.items():
+                                    if url:
+                                        url_hash = hashlib.md5(url.encode("utf-8")).hexdigest()
+                                        cache_path = os.path.join(cache_dir, f"{url_hash}.json").replace("\\", "/")
+                                        if os.path.exists(cache_path):
+                                            try:
+                                                with open(cache_path, "r", encoding="utf-8") as f_cache:
+                                                    cache_data = json.load(f_cache)
+                                                    if cache_data.get("excerpt_source") == "mock":
+                                                        mock_fetch_count += 1
+                                            except Exception:
+                                                pass
+                        except Exception as e:
+                            logger.error(f"Error calculating fidelity metadata: {e}")
+                            
+                    if "metadata" not in topic_data:
+                        topic_data["metadata"] = {}
+                    topic_data["metadata"]["fidelity"] = {
+                        "upstream_citation_ratio": ratio,
+                        "perspectives_covered": covered,
+                        "mock_fetch_count": mock_fetch_count,
+                        "deterministic_checks_passed": True
+                    }
             else:
                 for item_id, item_state in state.items.items():
                     with open(item_state.artifact_path, "r", encoding="utf-8") as f:

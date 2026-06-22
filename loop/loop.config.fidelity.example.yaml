@@ -1,0 +1,34 @@
+# Configuration for CI/Local testing of Content Fidelity Gates
+mode: storm_option_b
+topics:
+  - "test_solid_state_battery"
+mock_storm: true
+topic_concurrency: 2
+
+# Verify loop parameters
+max_iterations: 15
+state_file: "STATE.yaml"
+
+# Nav Toor fidelity validation settings
+nav_toor:
+  min_word_count: 500
+  peer_review_min_confidence: 7
+  min_outline_depth: 2
+  synthesis_min_findings: 5
+  contradiction_map_min_clashes: 3
+  
+  # Content fidelity gates configurations
+  fidelity:
+    article_mode: briefing_first    # Ground final article in synthesis briefing
+    article_min_perspective_mentions: 5
+    citation_upstream_min_ratio: 0.5
+    synthesis_term_overlap_min: 0.3
+    contradiction_min_reflected: 2
+    peer_review_min_grade: "B-"
+    peer_review_fail_on_missing_perspectives: true
+    article_max_attempts_before_escalate: 10
+    force_storm_regen_on_drift: true
+    blocked_citation_domains:
+      - dictionary.cambridge.org
+      - merriam-webster.com
+      - login.adaptiveinsights.com

@@ -591,7 +591,11 @@ class TestProductionFixes(unittest.TestCase):
             self.assertIn("incorrect_missing_perspectives", checks_failed)
             self.assertIn("academic", reason)
             
-            # 2. If it flags only 'historian' (which is not in perspectives.json), it should pass
+            # 2. If it flags only 'historian' (which is not in perspectives.json), and the article has it, it should pass
+            polished_path = os.path.join(tmpdir, "storm_gen_article_polished.txt").replace("\\", "/")
+            with open(polished_path, "w", encoding="utf-8") as f:
+                f.write("This article covers the views of the historian and academic perspectives.")
+                
             raw_data_valid = {
                 "missing_perspectives": ["historian"]
             }
@@ -617,12 +621,36 @@ class TestProductionFixes(unittest.TestCase):
             self.assertFalse(is_valid)
             self.assertIn("low_confidence", checks_failed)
             self.assertIn("confidence 5 is below required 7", reason)
+            
+            # 4. If peer review overall grade is below threshold, it should fail
+            raw_data_low_grade = {
+                "overall_grade": "C+",
+                "missing_perspectives": []
+            }
+            config_low_grade = {
+                "nav_toor": {
+                    "fidelity": {
+                        "peer_review_min_grade": "B-"
+                    }
+                }
+            }
+            is_valid, checks_failed, reason = run_deterministic_verify_checks(
+                "peer_review", raw_data_low_grade, config_low_grade, "test_topic", "test_item_id", tmpdir
+            )
+            self.assertFalse(is_valid)
+            self.assertIn("grade_below_threshold", checks_failed)
+            self.assertIn("below the required 'B-'", reason)
 
     def test_run_stage_article_missing_file_throws_error(self):
         from loop.storm_stages import run_stage_article
         config = {
             "run_id": "test_run_123",
-            "mock_storm": False
+            "mock_storm": False,
+            "nav_toor": {
+                "fidelity": {
+                    "article_mode": "storm_only"
+                }
+            }
         }
         with patch("loop.storm_stages.build_storm_runner") as mock_build, \
              patch("loop.storm_stages.sync_storm_files") as mock_sync:
@@ -643,6 +671,324 @@ class TestProductionFixes(unittest.TestCase):
             mock_build.return_value = mock_runner
             with self.assertRaises(FileNotFoundError):
                 run_stage_peer_review("test topic", 0, None, config)
+
+
+class TestStormFidelity(unittest.TestCase):
+    def setUp(self):
+        self.fixture_dir = "loop/fixtures/conformance_608a1d91"
+        self.config = {
+            "nav_toor": {
+                "fidelity": {
+                    "article_mode": "briefing_first",
+                    "article_min_perspective_mentions": 5,
+                    "citation_upstream_min_ratio": 0.5,
+                    "synthesis_term_overlap_min": 0.3,
+                    "contradiction_min_reflected": 2,
+                    "peer_review_min_grade": "B-",
+                    "peer_review_fail_on_missing_perspectives": True,
+                    "article_max_attempts_before_escalate": 10,
+                    "force_storm_regen_on_drift": True,
+                    "blocked_citation_domains": [
+                        "dictionary.cambridge.org",
+                        "merriam-webster.com",
+                        "login.adaptiveinsights.com"
+                    ]
+                }
+            }
+        }
+
+    def test_extract_article_text(self):
+        from loop.storm_fidelity import extract_article_text
+        article_json = {
+            "title": "My Article",
+            "sections": [
+                {"title": "Sec 1", "content": "Content of Sec 1.", "subsections": []},
+                {"title": "Sec 2", "content": "Content of Sec 2.", "subsections": [
+                    {"title": "Sub 2.1", "content": "Content of Sub 2.1.", "subsections": []}
+                ]}
+            ]
+        }
+        text = extract_article_text(article_json)
+        self.assertIn("My Article", text)
+        self.assertIn("Content of Sec 1.", text)
+        self.assertIn("Content of Sub 2.1.", text)
+
+    def test_count_perspective_mentions(self):
+        from loop.storm_fidelity import count_perspective_mentions
+        text = "This report discusses the practitioner perspective, while also introducing some academic and skeptic thoughts."
+        required = [
+            {"id": "practitioner", "label": "Practitioner"},
+            {"id": "academic", "label": "Academic"},
+            {"id": "skeptic", "label": "Skeptic"},
+            {"id": "economist", "label": "Economist"}
+        ]
+        counts = count_perspective_mentions(text, required)
+        self.assertEqual(counts["practitioner"], 1)
+        self.assertEqual(counts["academic"], 1)
+        self.assertEqual(counts["skeptic"], 1)
+        self.assertEqual(counts["economist"], 0)
+
+    def test_citation_upstream_ratio(self):
+        from loop.storm_fidelity import citation_upstream_ratio
+        citations = {
+            "[1]": "https://example.com/source1",
+            "[2]": "https://example.com/source2",
+            "[3]": "https://dictionary.com/word"
+        }
+        upstream_urls = [
+            "https://example.com/source1",
+            "https://example.com/source2",
+            "https://example.com/another"
+        ]
+        ratio = citation_upstream_ratio(citations, upstream_urls)
+        self.assertAlmostEqual(ratio, 2/3)
+
+    def test_synthesis_term_overlap(self):
+        from loop.storm_fidelity import synthesis_term_overlap
+        synthesis = {
+            "key_findings": [
+                {"finding": "Solid-state cell yield is currently sub-50% in testing.", "supporting_evidence": "Yield data"}
+            ],
+            "actionable_insights": [
+                {"insight": "Establish domestic processing to bypass tariffs."}
+            ]
+        }
+        article_text = "Yield testing shows solid-state cell yield is sub-50%. Establishing domestic processing helps bypass tariffs."
+        overlap = synthesis_term_overlap(synthesis, article_text)
+        self.assertGreater(overlap, 0.5)
+
+    def test_contradictions_reflected(self):
+        from loop.storm_fidelity import contradictions_reflected
+        contradiction_map = {
+            "clashes": [
+                {"description": "Academics claim rapid scaling of chemistry, while skeptics warn of recycling bottlenecks."}
+            ]
+        }
+        article_text = "Academics claim rapid scaling, but skeptics warns about recycling bottlenecks."
+        reflected = contradictions_reflected(contradiction_map, article_text)
+        self.assertEqual(reflected, 1)
+
+    def test_is_blocked_domain(self):
+        from loop.storm_fidelity import is_blocked_domain
+        blocked_list = ["merriam-webster.com", "dictionary.cambridge.org"]
+        self.assertTrue(is_blocked_domain("https://www.merriam-webster.com/dictionary/current", blocked_list))
+        self.assertFalse(is_blocked_domain("https://arxiv.org/abs/1234.5678", blocked_list))
+
+    def test_grade_at_least(self):
+        from loop.storm_fidelity import grade_at_least
+        self.assertTrue(grade_at_least("A-", "B-"))
+        self.assertTrue(grade_at_least("B-", "B-"))
+        self.assertFalse(grade_at_least("C+", "B-"))
+
+    def test_fixture_perspective_mentions_fails(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("missing_perspective_in_article", checks_failed)
+
+    def test_fixture_citation_upstream_ratio_fails(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+        # Set required perspectives to a word guaranteed to be present ("loop") to avoid early return on UCF-020
+        self.config["nav_toor"]["required_perspectives"] = [{"id": "loop", "label": "loop"}]
+        # Set min ratio high so it is guaranteed to fail
+        self.config["nav_toor"]["fidelity"]["citation_upstream_min_ratio"] = 0.5
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("low_upstream_citation_ratio", checks_failed)
+
+    def test_fixture_blocked_citation_domain_fails(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+        # Set required perspectives to a word guaranteed to be present ("loop") to avoid early return on UCF-020
+        self.config["nav_toor"]["required_perspectives"] = [{"id": "loop", "label": "loop"}]
+        # Set citation_upstream_min_ratio to 0.0 to avoid early return on UCF-021
+        self.config["nav_toor"]["fidelity"]["citation_upstream_min_ratio"] = 0.0
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("blocked_citation_domain", checks_failed)
+
+    def test_fixture_semantic_drift_fails(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+        # Bypass perspective check by required_perspectives targeting "loop"
+        self.config["nav_toor"]["required_perspectives"] = [{"id": "loop", "label": "loop"}]
+        # Bypass ratio check and blocked domain check
+        self.config["nav_toor"]["fidelity"]["citation_upstream_min_ratio"] = 0.0
+        self.config["nav_toor"]["fidelity"]["allow_blocked_domains"] = True
+        # Set synthesis overlap min high (0.5) so it fails on the fixture's 0.342 overlap
+        self.config["nav_toor"]["fidelity"]["synthesis_term_overlap_min"] = 0.5
+        
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("semantic_drift", checks_failed)
+
+    def test_fixture_contradictions_not_reflected_fails(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+        # Bypass perspective, ratio, blocked domain, and synthesis overlap checks
+        self.config["nav_toor"]["required_perspectives"] = [{"id": "loop", "label": "loop"}]
+        self.config["nav_toor"]["fidelity"]["citation_upstream_min_ratio"] = 0.0
+        self.config["nav_toor"]["fidelity"]["allow_blocked_domains"] = True
+        self.config["nav_toor"]["fidelity"]["synthesis_term_overlap_min"] = 0.0
+        # Set contradiction clashes min high (5) so it fails on the fixture
+        self.config["nav_toor"]["fidelity"]["contradiction_min_reflected"] = 5
+        
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("contradictions_not_reflected", checks_failed)
+
+    def test_fixture_semantic_drift_fails_without_bypass_ucf020(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+        
+        # Modify the loaded article data in memory to mention all 5 standard perspectives
+        if article_data.get("sections"):
+            article_data["sections"][0]["content"] += " practitioner academic skeptic economist historian"
+            
+        self.config["nav_toor"]["fidelity"]["citation_upstream_min_ratio"] = 0.0
+        self.config["nav_toor"]["fidelity"]["allow_blocked_domains"] = True
+        self.config["nav_toor"]["fidelity"]["synthesis_term_overlap_min"] = 0.5
+        
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("semantic_drift", checks_failed)
+
+    def test_fixture_contradictions_not_reflected_fails_without_bypass_ucf020(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "article.json"), "r", encoding="utf-8") as f:
+            article_data = json.load(f)
+            
+        # Modify the loaded article data in memory to mention all 5 standard perspectives
+        if article_data.get("sections"):
+            article_data["sections"][0]["content"] += " practitioner academic skeptic economist historian"
+            
+        self.config["nav_toor"]["fidelity"]["citation_upstream_min_ratio"] = 0.0
+        self.config["nav_toor"]["fidelity"]["allow_blocked_domains"] = True
+        self.config["nav_toor"]["fidelity"]["synthesis_term_overlap_min"] = 0.0
+        self.config["nav_toor"]["fidelity"]["contradiction_min_reflected"] = 5
+        
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "article", article_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("contradictions_not_reflected", checks_failed)
+
+    def test_fixture_peer_review_fails_on_grade_and_missing_perspectives(self):
+        from loop.storm_verify import run_deterministic_verify_checks
+        with open(os.path.join(self.fixture_dir, "peer_review.json"), "r", encoding="utf-8") as f:
+            peer_review_data = json.load(f)
+        
+        # 1. Grade check fails
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "peer_review", peer_review_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("grade_below_threshold", checks_failed)
+
+        # 2. Gaps check fails if we override grade to pass
+        peer_review_data["overall_grade"] = "A"
+        is_valid, checks_failed, reason = run_deterministic_verify_checks(
+            "peer_review", peer_review_data, self.config, "topic", "item_id", self.fixture_dir
+        )
+        self.assertFalse(is_valid)
+        self.assertIn("peer_review_unresolved_gaps", checks_failed)
+
+    @patch.dict(os.environ, {"INJECT_TOPIC_DRIFT": "1"})
+    def test_inject_topic_drift_hook(self):
+        from loop.storm_stages import run_stage_article
+        from loop.storm_verify import run_deterministic_verify_checks
+        import shutil
+        
+        run_id = "test_drift"
+        topic_slug = "test_topic"
+        target_dir = f"artifacts/raw/{run_id}/{topic_slug}"
+        os.makedirs(target_dir, exist_ok=True)
+        self.addCleanup(shutil.rmtree, f"artifacts/raw/{run_id}", ignore_errors=True)
+        
+        # Setup dummy files in target_dir representing output_dir
+        with open(os.path.join(target_dir, "research_briefing.json"), "w") as f:
+            json.dump({
+                "key_findings": [
+                    {"finding": "EV battery cell chemistry must decline to $100/kWh for mass parity in loop engineering transition.", "supporting_evidence": "Evidence"}
+                ],
+                "actionable_insights": []
+            }, f)
+        with open(os.path.join(target_dir, "contradiction_map.json"), "w") as f:
+            json.dump({"clashes": []}, f)
+        with open(os.path.join(target_dir, "outline.json"), "w") as f:
+            json.dump({"sections": []}, f)
+        
+        # Write storm_gen_article.txt so mock_storm doesn't run live LLM
+        with open(os.path.join(target_dir, "storm_gen_article.txt"), "w") as f:
+            f.write("A good article content.")
+            
+        config = {
+            "run_id": run_id,
+            "mock_storm": False,
+            "nav_toor": {
+                "min_word_count": 5,
+                "required_perspectives": [{"id": "pizza", "label": "pizza"}],
+                "fidelity": {
+                    "article_mode": "storm_only",
+                    "force_storm_regen_on_drift": False,
+                    "synthesis_term_overlap_min": 0.3,
+                    "contradiction_min_reflected": 0
+                }
+            }
+        }
+        
+        def mock_call_llm(prompt, config, use_planner=False):
+            if "pizza" in prompt:
+                return json.dumps({
+                    "title": "Drifted Article",
+                    "sections": [
+                        {"title": "Pizza History", "content": "This is a completely unrelated essay about cooking pizza."}
+                    ],
+                    "citation_references": {},
+                    "word_count_min": 500
+                })
+            return json.dumps({
+                "title": "Clean Article",
+                "sections": [
+                    {"title": "Intro", "content": "This covers practitioners and academics."}
+                ],
+                "citation_references": {},
+                "word_count_min": 500
+            })
+            
+        with patch("loop.storm_stages.sync_storm_files"), \
+             patch("loop.storm_stages.call_llm", side_effect=mock_call_llm):
+            # Run on attempt 0 (should activate hook and replace with off-topic content)
+            res = run_stage_article("test topic", 0, None, config)
+            with open(res["artifact_paths"][1], "r") as f:
+                content_json = json.load(f)
+            
+            # Check that it got replaced with pizza content
+            is_valid, checks_failed, reason = run_deterministic_verify_checks(
+                "article", content_json, config, "test topic", "item_id", target_dir
+            )
+            self.assertFalse(is_valid)
+            self.assertIn("semantic_drift", checks_failed)
 
 
 

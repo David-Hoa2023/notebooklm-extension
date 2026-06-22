@@ -6,13 +6,16 @@ This document serves as the developer walkthrough for the autonomous self-verify
 
 The implementation is located under the standard `loop/` package directory:
 - **[__init__.py](file:///d:/AI_project/loop/loop/__init__.py)**: Standard package identifier.
-- **[state.py](file:///d:/AI_project/loop/loop/state.py)**: Defines `LoopState` and `ItemState` Pydantic models mapping to the epic design schema in `verify-gate-backlog.yaml`. State persistence is handled atomically using temporary write + replace.
-- **[pre_verify.py](file:///d:/AI_project/loop/loop/pre_verify.py)**: Implements deterministic, cheap validations (e.g. invalid URL formats, sentinel values, empty metrics) using Pydantic validation before querying LLMs. It validates the aligned schema containing the `stock_price` field.
-- **[feeds.py](file:///d:/AI_project/loop/loop/feeds.py)**: Real live market connectors. Connects to the public Binance API (cryptocurrency rates) and Yahoo Finance chart API (live stock prices) without requiring keys.
-- **[run.py](file:///d:/AI_project/loop/loop/run.py)**: Orchestrates the Plan -> Execute -> Verify -> Repeat control loop, managing state transitions, escalation reporting, and resume capabilities.
-- **[tests.py](file:///d:/AI_project/loop/loop/tests.py)**: Exposes a suite of automated unit tests covering pre-verifier validation logic, state IO, and feed connectors.
-- **[verify_gate_system.md](file:///d:/AI_project/loop/prompts/verify_gate_system.md)**: Extracted GLM-5.2 verifier system prompt detailing requirements, stock price verification checklist, and JSON output structure.
-- **[loop.config.yaml](file:///d:/AI_project/loop/loop.config.yaml)**: Configuration file detailing default models, retry thresholds, and items list.
+- **[state.py](file:///d:/AI_project/loop/loop/state.py)**: Defines `LoopState` and `ItemState` Pydantic models mapping to the epic design schema in `verify-gate-backlog.yaml` (augmented with `regen_hint`). State persistence is handled atomically using temporary write + replace.
+- **[pre_verify.py](file:///d:/AI_project/loop/loop/pre_verify.py)**: Implements deterministic, cheap validations using Pydantic validation.
+- **[feeds.py](file:///d:/AI_project/loop/loop/feeds.py)**: Real live market connectors, now returning `excerpt_source: mock` for dictionary/403 page overrides.
+- **[run.py](file:///d:/AI_project/loop/loop/run.py)**: Orchestrates the control loop, now handling semantic failures, attempt capping (escalation), and final report merging.
+- **[tests.py](file:///d:/AI_project/loop/loop/tests.py)**: Exposes the automated unit test suite, now containing `TestStormFidelity` (49 tests total).
+- **[storm_fidelity.py](file:///d:/AI_project/loop/loop/storm_fidelity.py)**: Pure utility functions checking required perspectives, synthesis overlap, and contradiction mapping.
+- **[fixtures/conformance_608a1d91](file:///d:/AI_project/loop/loop/fixtures/conformance_608a1d91)**: Regression fixture snapshot containing perspectives, contradictions, research briefing, outline, article, and peer review data from the failed `608a1d91` run used for offline testing.
+- **[use-case-fidelity-backlog.yaml](file:///d:/AI_project/loop/use-case-fidelity-backlog.yaml)**: The complete backlog of tasks implementing content fidelity enhancements.
+- **[verify_gate_system.md](file:///d:/AI_project/loop/prompts/verify_gate_system.md)**: GLM-5.2 verifier system prompt.
+- **[loop.config.yaml](file:///d:/AI_project/loop/loop.config.yaml)**: Configuration file.
 
 ---
 
@@ -151,6 +154,73 @@ To prove the adversarial check:
 - **Rejection History Logging**: Rejections across all phases (execution, pre-verify, and verification) are now logged persistently to a run-specific log file: `artifacts/raw/{run_id}/rejections.json` for full audit trails.
 - **Failed Runs Prior to Success**: Earlier runs hit max iterations and escalated (producing escalation reports in `artifacts/escalation/*.md`) due to credit limit constraints and Kimi output parsing issues, which guided our implementation of robust parsing and token limit adjustments.
 - **Revenue/Margin Validation Gap**: Currently, the verifier snapshot only receives live stock prices, meaning other fields like revenue/margin pass on trust. BYD's final margin was `17.5` (representing 17.5% as a literal percentage) while TSLA's was `0.178` (representing 17.8% as a ratio). This highlighting inconsistency remains an open item for future feed additions.
+
+---
+
+## Use-Case Content Fidelity: Upstream-to-Final Alignment
+
+To resolve the conceptual drift and citation loop issues found in the `608a1d91` run (documented in [use-case-fidelity-backlog.yaml](file:///d:/AI_project/loop/use-case-fidelity-backlog.yaml)), we added the **Briefing-First** mode and a strict set of deterministic verify checks:
+
+### Postmortem: The 68-Attempt Article Loop
+In run `608a1d91`, the raw article generation did not have access to the research briefing (`research_briefing.json`) or contradiction map (`contradiction_map.json`) produced in previous stages. This resulted in:
+1. **Conceptual Drift**: The model wrote about "Microsoft Loop" (the collaborative software tool) and dictionary definitions of "loop" instead of the academic domain of "AI loop engineering."
+2. **Citation Loops**: The generated citations relied heavily on dictionary sites rather than the upstream harvested sources, causing the strict verifier to repeatedly reject the article (totaling 68 attempts).
+
+### The Solution: Briefing-First Mode & Verify Gates
+1. **Briefing-First Mode (P5)**: Generates the article based on the `research_briefing.json`, `contradiction_map.json`, and `outline.json` rather than relying only on raw STORM outputs (prompt: [p5_article_from_briefing.md](file:///d:/AI_project/loop/prompts/storm/p5_article_from_briefing.md)).
+2. **Citations Restrictions**: Numeric citation references are restricted to the allowed upstream collected source pool.
+3. **Layered Fidelity Checks**:
+   - Required perspectives coverage in article text.
+   - Upstream citation ratio checking (default >= 0.5).
+   - Domain blocklists (e.g. blocking dictionary domains).
+   - Jaccard term overlap with the research briefing (default >= 0.3).
+   - Contradiction mapping clashes reflected in article (default >= 2).
+   - Peer review overall grade (default >= B-) and unresolved gaps checks.
+
+### Content Fidelity Architecture
+
+```mermaid
+graph TD
+    Synth[Synthesis Stage: research_briefing.json] --> P5Gen[Briefing-First Article Gen: prompts/storm/p5_article_from_briefing.md]
+    P5Gen --> ArticleJSON[Generated article.json]
+    ArticleJSON --> FidChecks[Deterministic Fidelity Verify Gates]
+    
+    FidChecks --> PCheck[1. Required Perspectives Count >= 1]
+    FidChecks --> RCheck[2. Citation Upstream URL Ratio >= 0.5]
+    FidChecks --> BCheck[3. Domain Blocklist Check]
+    FidChecks --> SCheck[4. Synthesis Term Overlap >= 0.3]
+    FidChecks --> CCheck[5. Contradiction Map Clashes >= 2]
+    
+    PCheck -- Pass --> RCheck
+    RCheck -- Pass --> BCheck
+    BCheck -- Pass --> SCheck
+    SCheck -- Pass --> CCheck
+    
+    CCheck -- Pass --> Polish[STORM Polish Stage]
+    Polish --> PR[Peer Review Stage]
+    
+    PR --> PRChecks[Peer Review Verify Gates]
+    PRChecks --> PRGrade[1. Overall Grade >= B-]
+    PRChecks --> PRGaps[2. Zero Genuine Missing Perspectives]
+    
+    PRGrade -- Pass --> PRGaps
+    PRGaps -- Pass --> Success[Pass E2E Research Loop]
+    
+    PCheck -- Fail --> Regen[briefing_first regen_hint]
+    RCheck -- Fail --> Regen
+    BCheck -- Fail --> Regen
+    SCheck -- Fail --> Regen
+    CCheck -- Fail --> Regen
+    
+    Regen --> P5Gen
+```
+
+### Adversarial Environment Variables
+The following environment variables enable testing of self-correction:
+- `INJECT_WRONG_PRICE=1`: Injects a wrong stock price for EV verification tests.
+- `INJECT_MISSING_PERSPECTIVE=<perspective_id>`: Drops a perspective during the perspectives stage on attempt 0.
+- `INJECT_BAD_CITATION=1`: Injects a blocked/dead link during the article stage on attempt 0.
+- `INJECT_TOPIC_DRIFT=1`: Replaces article content with off-topic pizza text on attempt 0 containing all 5 required perspectives (implemented in [storm_mock.py](file:///d:/AI_project/loop/loop/storm_mock.py) for the mock path and [storm_stages.py](file:///d:/AI_project/loop/loop/storm_stages.py) for the real path), verifying that the semantic drift overlap gate fails specifically without failing the perspective count gate.
 
 ---
 

@@ -209,6 +209,7 @@ class ArticleSection(BaseModel):
     title: str
     content: str
     citation_indices: List[int] = Field(default_factory=list)
+    perspective_coverage: List[str] = Field(default_factory=list)
 
 class ArticleSchema(BaseModel):
     title: str

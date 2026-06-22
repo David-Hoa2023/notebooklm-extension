@@ -233,11 +233,15 @@ def mock_stage_article(topic: str, attempt: int, last_rejection: Optional[str], 
 
     # Check adversarial bad citation hook
     inject_bad = os.environ.get("INJECT_BAD_CITATION") == "1"
+    inject_drift = os.environ.get("INJECT_TOPIC_DRIFT") == "1"
 
-    # Make attempt 0 fail word count or inject a dead citation link
+    # Make attempt 0 fail word count, inject a dead citation link, or inject topic drift
     word_count_min = 500
     if attempt == 0:
-        if inject_bad:
+        if inject_drift:
+            logger.info("🎭 [Mock Article] Injecting topic drift for attempt 0 due to INJECT_TOPIC_DRIFT")
+            citation_url = "https://example.com/battery_tech"
+        elif inject_bad:
             logger.info("🎭 [Mock Article] Injecting bad citation for attempt 0 due to INJECT_BAD_CITATION")
             citation_url = "https://example.com/dead_link"
         else:
@@ -247,11 +251,38 @@ def mock_stage_article(topic: str, attempt: int, last_rejection: Optional[str], 
     else:
         citation_url = "https://example.com/battery_tech"
 
-    # Generate content that meets the length requirement if not attempt 0 short
-    content_block_1 = "This is a detailed analysis of battery chemistry breakthroughs. " * 30
-    content_block_2 = "Supply chain and tariff issues are driving costs. " * 30
+    # Generate content that meets the length requirement if not attempt 0 short or drifted
+    if attempt == 0 and inject_drift:
+        content_block_1 = (
+            "This is a completely unrelated essay about cooking pizza and the history of tomato sauce. "
+            "The practitioner likes baking pizza. The academic researches pizza fermentation. "
+            "The skeptic warns about high sodium in pizza dough. The economist analyzes pizza delivery costs. "
+            "The historian writes about early Neapolitan pizza makers. "
+        ) * 10
+        content_block_2 = (
+            "Tomato sauce recipes have evolved. We do not mention EV battery chemistry here. "
+            "The practitioner builds pizza ovens. The academic teaches pizza chemistry. "
+            "The skeptic hates pineapple toppings. The economist projects cheese market rates. "
+            "The historian documents pasta transitions. "
+        ) * 10
+    else:
+        content_block_1 = (
+            "This is a detailed analysis of battery chemistry breakthroughs. It covers the practitioner views on Giga-factory yield rates, "
+            "academic research on solid-state cell yield, and skeptic warnings about thermal runaway defect rates. "
+            "Toyota, QuantumScape, and Solid Power are researching sulfide, oxide, and polymer electrolyte systems. "
+            "We note that academic breakthroughs in chemistry scaling are fast, but skeptics emphasize recycling bottlenecks and defect rates. "
+            "Also, practitioners demand high-spec custom cells, whereas economists require standardization to lower costs. "
+            "Solid-state cell yield is currently sub-50% in testing. Battery cell pricing must decline to $100/kWh for mass parity. "
+        ) * 5
+        content_block_2 = (
+            "Supply chain and tariff issues are driving costs. This analysis incorporates economist forecasts of price points per kWh "
+            "and historian observations regarding historical transitions from lead-acid. Historians point out the slow pace of past "
+            "infrastructure changes, while practitioners expect sudden disruption. "
+            "Recycling of spent LFP batteries is economically unviable today. Historical transitions suggest standardizations take 15 years. "
+            "Tariffs increase battery pack costs by 20% in the US. "
+        ) * 5
     
-    if attempt == 0 and not inject_bad:
+    if attempt == 0 and not inject_bad and not inject_drift:
         # short content
         content_block_1 = "Short content. " * 5
         content_block_2 = "Short content. " * 5

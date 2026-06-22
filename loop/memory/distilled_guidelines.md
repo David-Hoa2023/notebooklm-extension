@@ -173,3 +173,38 @@
 - **Observations**: 
   - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
   - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.
+
+## Run Guidelines - 2026-06-22T21:32:43.743686
+- **Success Criteria**: Zero active rejections achieved.
+- **Verified Items**: ev_battery_supply_chain_2026::perspectives, ev_battery_supply_chain_2026::contradictions, ev_battery_supply_chain_2026::outline, ev_battery_supply_chain_2026::synthesis, ev_battery_supply_chain_2026::article, ev_battery_supply_chain_2026::peer_review, solidstate_battery_commercialization::perspectives, solidstate_battery_commercialization::contradictions, solidstate_battery_commercialization::outline, solidstate_battery_commercialization::synthesis, solidstate_battery_commercialization::article, solidstate_battery_commercialization::peer_review, chinese_ev_export_tariffs_impact::perspectives, chinese_ev_export_tariffs_impact::contradictions, chinese_ev_export_tariffs_impact::outline, chinese_ev_export_tariffs_impact::synthesis, chinese_ev_export_tariffs_impact::article, chinese_ev_export_tariffs_impact::peer_review
+- **Observations**: 
+  - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
+  - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.
+
+## Run Guidelines - 2026-06-22T21:43:53.086130
+- **Success Criteria**: Zero active rejections achieved.
+- **Verified Items**: ev_battery_supply_chain_2026::perspectives, ev_battery_supply_chain_2026::contradictions, ev_battery_supply_chain_2026::outline, ev_battery_supply_chain_2026::synthesis, ev_battery_supply_chain_2026::article, ev_battery_supply_chain_2026::peer_review, solidstate_battery_commercialization::perspectives, solidstate_battery_commercialization::contradictions, solidstate_battery_commercialization::outline, solidstate_battery_commercialization::synthesis, solidstate_battery_commercialization::article, solidstate_battery_commercialization::peer_review, chinese_ev_export_tariffs_impact::perspectives, chinese_ev_export_tariffs_impact::contradictions, chinese_ev_export_tariffs_impact::outline, chinese_ev_export_tariffs_impact::synthesis, chinese_ev_export_tariffs_impact::article, chinese_ev_export_tariffs_impact::peer_review
+- **Observations**: 
+  - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
+  - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.
+
+## Run Guidelines - 2026-06-22T21:53:26.912963
+- **Success Criteria**: Zero active rejections achieved.
+- **Verified Items**: test_solid_state_battery::perspectives, test_solid_state_battery::contradictions, test_solid_state_battery::outline, test_solid_state_battery::synthesis, test_solid_state_battery::article, test_solid_state_battery::peer_review
+- **Observations**: 
+  - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
+  - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.
+
+## Run Guidelines - 2026-06-22T22:02:24.243344
+- **Success Criteria**: Zero active rejections achieved.
+- **Verified Items**: test_solid_state_battery::perspectives, test_solid_state_battery::contradictions, test_solid_state_battery::outline, test_solid_state_battery::synthesis, test_solid_state_battery::article, test_solid_state_battery::peer_review
+- **Observations**: 
+  - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
+  - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.
+
+## Run Guidelines - 2026-06-22T22:27:39.839793
+- **Success Criteria**: Zero active rejections achieved.
+- **Verified Items**: test_solid_state_battery::perspectives, test_solid_state_battery::contradictions, test_solid_state_battery::outline, test_solid_state_battery::synthesis, test_solid_state_battery::article, test_solid_state_battery::peer_review
+- **Observations**: 
+  - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
+  - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.

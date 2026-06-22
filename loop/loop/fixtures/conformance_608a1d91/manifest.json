@@ -1,0 +1,29 @@
+{
+  "run_id": "608a1d91-7205-4941-a30e-c4cd07dfa125",
+  "topic": "loop engineering in AI in 2026",
+  "expected_failures": {
+    "article.json": {
+      "missing_perspective_in_article": [
+        "skeptic",
+        "economist",
+        "historian"
+      ],
+      "low_upstream_citation_ratio": {
+        "description": "High number of dictionary/reference URLs instead of source URLs from perspectives",
+        "threshold": 0.5
+      },
+      "semantic_drift": {
+        "description": "Article focuses heavily on Microsoft Loop product or generic terms instead of the structured RAG synthesis briefing"
+      }
+    },
+    "peer_review.json": {
+      "peer_review_unresolved_gaps": {
+        "description": "Peer review claims pass while reporting multiple missing perspectives"
+      },
+      "grade_below_threshold": {
+        "grade": "C+",
+        "min_grade": "B-"
+      }
+    }
+  }
+}
