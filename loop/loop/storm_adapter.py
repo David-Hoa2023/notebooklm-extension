@@ -17,8 +17,41 @@ try:
         class DuckDuckGoSearchRM:
             def __call__(self, *args, **kwargs):
                 return []
+
+    class SafeLitellmModel(LitellmModel):
+        def __call__(self, prompt=None, messages=None, **kwargs):
+            # Enforce minimum max_tokens to accommodate reasoning models/tokens
+            if "max_tokens" in kwargs:
+                kwargs["max_tokens"] = max(kwargs["max_tokens"], 2000)
+            else:
+                kwargs["max_tokens"] = 2000
+
+            try:
+                res = super().__call__(prompt=prompt, messages=messages, **kwargs)
+                with open("litellm_calls.jsonl", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "model": self.model,
+                        "prompt": prompt,
+                        "messages": messages,
+                        "kwargs": {k: v for k, v in kwargs.items() if not k.startswith("api_")},
+                        "result": res,
+                        "status": "success"
+                    }, ensure_ascii=False) + "\n")
+                return res
+            except Exception as e:
+                with open("litellm_calls.jsonl", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "model": self.model,
+                        "prompt": prompt,
+                        "messages": messages,
+                        "kwargs": {k: v for k, v in kwargs.items() if not k.startswith("api_")},
+                        "error": str(e),
+                        "status": "error"
+                    }, ensure_ascii=False) + "\n")
+                raise e
+
     HAS_STORM = True
-    
+
     # Monkey patch StormInformationTable to safely handle empty retrieved snippets
     try:
         from knowledge_storm.storm_wiki.modules.storm_dataclass import StormInformationTable
@@ -58,38 +91,22 @@ try:
         logger.warning(f"Could not monkey-patch FileIOHelper: {io_patch_err}")
 except ImportError:
     HAS_STORM = False
-
-class SafeLitellmModel(LitellmModel):
-    def __call__(self, prompt=None, messages=None, **kwargs):
-        # Enforce minimum max_tokens to accommodate reasoning models/tokens
-        if "max_tokens" in kwargs:
-            kwargs["max_tokens"] = max(kwargs["max_tokens"], 2000)
-        else:
-            kwargs["max_tokens"] = 2000
-            
-        try:
-            res = super().__call__(prompt=prompt, messages=messages, **kwargs)
-            with open("litellm_calls.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps({
-                    "model": self.model,
-                    "prompt": prompt,
-                    "messages": messages,
-                    "kwargs": {k: v for k, v in kwargs.items() if not k.startswith("api_")},
-                    "result": res,
-                    "status": "success"
-                }, ensure_ascii=False) + "\n")
-            return res
-        except Exception as e:
-            with open("litellm_calls.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps({
-                    "model": self.model,
-                    "prompt": prompt,
-                    "messages": messages,
-                    "kwargs": {k: v for k, v in kwargs.items() if not k.startswith("api_")},
-                    "error": str(e),
-                    "status": "error"
-                }, ensure_ascii=False) + "\n")
-            raise e
+    
+    class STORMWikiRunnerArguments:
+        pass
+        
+    class STORMWikiRunner:
+        pass
+        
+    class STORMWikiLMConfigs:
+        pass
+        
+    class SafeLitellmModel:
+        pass
+        
+    class DuckDuckGoSearchRM:
+        def __call__(self, *args, **kwargs):
+            return []
 
 def build_storm_runner(config: Dict[str, Any]) -> Any:
     """

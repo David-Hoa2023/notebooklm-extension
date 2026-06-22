@@ -173,6 +173,7 @@ The new/updated components are under `loop/`:
 - **Cascade Resets**: If a dependency stage is failed and reset, all downstream stages of the topic are automatically reset back to `pending`.
 - **Adversarial Scoping**: Verification injections (`INJECT_BAD_CITATION=1` and `INJECT_MISSING_PERSPECTIVE=historian`) are scoped strictly to attempt 0, verifying robust self-correction.
 - **Config-Driven Thresholds**: Validators and verifier gates retrieve validation limits dynamically from the configuration block (specifically `required_perspectives`, `contradiction_map_min_clashes`, `synthesis_min_findings`, `peer_review_min_confidence`, `min_word_count`, and `min_outline_depth`) using Pydantic context validation and verifier config parameters, enabling fully customizable tuning from YAML configs.
+- **Early File-Missing Hardening**: Hardened `run_stage_article` and `run_stage_peer_review` in `loop/storm_stages.py` to raise a `FileNotFoundError` immediately if their expected STORM output file is missing after generation/sync. This triggers an execution failure early and prevents the orchestrator from parsing empty content or entering a semantic rejection loop.
 
 ### Integration Verification
 1. **Automated Unit Tests**: Verified via `python -m unittest loop.tests` (37 tests passed).
