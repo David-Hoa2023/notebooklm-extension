@@ -10,3 +10,9 @@ __pycache__/
 *.log
 *.aux
 *.pdf
+
+# Run artifacts & state
+artifacts/
+litellm_calls.jsonl
+STATE*.yaml
+
