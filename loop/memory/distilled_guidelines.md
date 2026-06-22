@@ -166,3 +166,10 @@
 - **Observations**: 
   - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
   - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.
+
+## Run Guidelines - 2026-06-22T17:37:59.637756
+- **Success Criteria**: Zero active rejections achieved.
+- **Verified Items**: solidstate_battery_commercialization::perspectives, solidstate_battery_commercialization::contradictions, solidstate_battery_commercialization::outline, solidstate_battery_commercialization::synthesis, solidstate_battery_commercialization::article, solidstate_battery_commercialization::peer_review
+- **Observations**: 
+  - Iterative self-correction corrected structural issues (pre-verify) and stock price discrepancies (LLM verifier).
+  - Pre-verification correctly filtered invalid URLs and placeholder variables, reducing LLM token costs.

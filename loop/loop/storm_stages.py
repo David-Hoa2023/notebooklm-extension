@@ -20,6 +20,43 @@ def load_prompt_template(name: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
+def sync_storm_files(topic: str, config: Dict[str, Any]):
+    """
+    Finds the directory where STORM wrote files, and copies them to the
+    orchestrator's canonical to_topic_slug(topic) output directory to keep them synced.
+    """
+    import shutil
+    run_id = config.get("run_id", "")
+    canonical_dir = os.path.join("artifacts", "raw", run_id, to_topic_slug(topic)).replace("\\", "/")
+    os.makedirs(canonical_dir, exist_ok=True)
+    
+    # Try to find the directory where STORM actually wrote files
+    base_dir = os.path.join("artifacts", "raw", run_id).replace("\\", "/")
+    if not os.path.exists(base_dir):
+        return
+        
+    expected_slug = to_topic_slug(topic).replace("_", "").lower()
+    storm_dir = None
+    for entry in os.listdir(base_dir):
+        entry_path = os.path.join(base_dir, entry).replace("\\", "/")
+        if os.path.isdir(entry_path):
+            normalized_entry = entry.lower().replace("-", "").replace("_", "")
+            if normalized_entry == expected_slug and entry_path != canonical_dir:
+                storm_dir = entry_path
+                break
+                
+    if storm_dir and os.path.exists(storm_dir):
+        logger.info(f"Syncing files from STORM output dir '{storm_dir}' to canonical dir '{canonical_dir}'")
+        for file_name in os.listdir(storm_dir):
+            src_file = os.path.join(storm_dir, file_name)
+            if os.path.isfile(src_file):
+                dst_file = os.path.join(canonical_dir, file_name)
+                try:
+                    shutil.copy2(src_file, dst_file)
+                except Exception as e:
+                    logger.warning(f"Failed to copy '{src_file}' to '{dst_file}': {e}")
+
+
 def call_llm(prompt: str, config: Dict[str, Any], use_planner: bool = False) -> str:
     """
     Calls the configured LLM (planner_verifier or executor_swarm) via OpenRouter.
@@ -61,6 +98,8 @@ def run_stage_perspectives(topic: str, attempt: int, last_rejection: Optional[st
     runner = build_storm_runner(config)
     runner.run(topic=topic, do_research=True, do_generate_outline=False, do_generate_article=False, do_polish_article=False)
     runner.post_run()
+    sync_storm_files(topic, config)
+
     
     # 2. Enrich/Post-process into perspectives.json using P1 prompt template
     p1_template = load_prompt_template("p1_multi_perspective_scan.md")
@@ -138,6 +177,8 @@ def run_stage_outline(topic: str, attempt: int, last_rejection: Optional[str], c
     runner = build_storm_runner(config)
     runner.run(topic=topic, do_research=False, do_generate_outline=True, do_generate_article=False, do_polish_article=False)
     runner.post_run()
+    sync_storm_files(topic, config)
+
     
     # Convert/Normalize outline.txt into outline.json with coverage tags
     outline_txt_path = os.path.join(output_dir, "storm_gen_outline.txt").replace("\\", "/")
@@ -243,6 +284,8 @@ def run_stage_article(topic: str, attempt: int, last_rejection: Optional[str], c
         runner = build_storm_runner(config)
         runner.run(topic=topic, do_research=False, do_generate_outline=False, do_generate_article=True, do_polish_article=False)
         runner.post_run()
+        sync_storm_files(topic, config)
+
     if os.path.exists(article_txt_path):
         with open(article_txt_path, "r", encoding="utf-8") as f:
             article_content = f.read()
@@ -263,6 +306,34 @@ def run_stage_article(topic: str, attempt: int, last_rejection: Optional[str], c
                         ref_mapping_str += f"[{idx}]: {url}\n"
         except Exception as e:
             logger.error(f"Failed to load url_to_info.json: {e}")
+
+    if not ref_mapping_str:
+        # Fallback: extract source URLs from upstream perspectives.json
+        perspectives_path = os.path.join(output_dir, "perspectives.json").replace("\\", "/")
+        if os.path.exists(perspectives_path):
+            try:
+                with open(perspectives_path, "r", encoding="utf-8") as f:
+                    p_data = json.load(f)
+                    urls = []
+                    for p in p_data.get("perspectives", []):
+                        for src in p.get("sources", []):
+                            if src and src not in urls:
+                                urls.append(src)
+                    if urls:
+                        # Write back to url_to_info.json so it's persistent and matches downstream expectations
+                        ref_data = {
+                            "url_to_unified_index": {url: i + 1 for i, url in enumerate(urls)},
+                            "url_to_info": {}
+                        }
+                        with open(url_to_info_path, "w", encoding="utf-8") as f_out:
+                            json.dump(ref_data, f_out, indent=2)
+                        
+                        index_to_url = {i + 1: url for i, url in enumerate(urls)}
+                        ref_mapping_str = "You MUST map the numeric citations in the text to these exact URLs in 'citation_references':\n"
+                        for idx, url in sorted(index_to_url.items()):
+                            ref_mapping_str += f"[{idx}]: {url}\n"
+            except Exception as e:
+                logger.error(f"Failed to build fallback url_to_info.json: {e}")
         
     # We parse to article.json
     parser_prompt = f"""
@@ -324,6 +395,8 @@ def run_stage_peer_review(topic: str, attempt: int, last_rejection: Optional[str
         runner = build_storm_runner(config)
         runner.run(topic=topic, do_research=False, do_generate_outline=False, do_generate_article=False, do_polish_article=True)
         runner.post_run()
+        sync_storm_files(topic, config)
+
     if os.path.exists(polished_txt_path):
         with open(polished_txt_path, "r", encoding="utf-8") as f:
             polished_content = f.read()

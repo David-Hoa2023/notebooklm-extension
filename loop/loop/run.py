@@ -8,6 +8,13 @@ import re
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
 
+# Load environment variables from .env if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Fix output encoding for Windows terminals
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")

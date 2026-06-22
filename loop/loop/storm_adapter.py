@@ -38,6 +38,24 @@ try:
         logger.info("Successfully monkey-patched StormInformationTable.retrieve_information")
     except Exception as patch_err:
         logger.warning(f"Could not monkey-patch StormInformationTable: {patch_err}")
+
+    # Monkey patch FileIOHelper to use utf-8 for Windows file operations compatibility
+    try:
+        from knowledge_storm.utils import FileIOHelper
+        
+        def safe_write_str(s, path):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(s)
+                
+        def safe_load_str(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return "\n".join(f.readlines())
+                
+        FileIOHelper.write_str = safe_write_str
+        FileIOHelper.load_str = safe_load_str
+        logger.info("Successfully monkey-patched FileIOHelper string IO methods to use UTF-8.")
+    except Exception as io_patch_err:
+        logger.warning(f"Could not monkey-patch FileIOHelper: {io_patch_err}")
 except ImportError:
     HAS_STORM = False
 
