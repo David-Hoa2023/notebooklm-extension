@@ -221,7 +221,17 @@ The pipeline executed the first 4 stages successfully with very few retries:
 
 *Baseline comparison*: In the baseline run on `'loop engineering in AI in 2026'`, the verifier ran 84 total iterations because it lacked cheap local checks, repeatedly querying OpenRouter on raw formatting bugs, missing keys, and invalid lists. With the new deterministic checks, structural issues were resolved immediately before calling the LLM, reducing the retry rate for perspectives/contradictions/outline/synthesis to near zero.
 
-*Upstream Library Block*: The `article` generation stage hit **9 pre_failed execution attempts** before max iterations escalated. The underlying cause was an execution error originating from the upstream `knowledge-storm` library's information retrieval module:
-`ValueError: Expected 2D array, got 1D array instead: array=[]` inside `cosine_similarity`. This occurred when the DuckDuckGo search query returned zero snippets for a specific sub-topic, causing scikit-learn to crash on empty inputs. Despite this data-gathering error from STORM, the verification orchestration functioned exactly as designed. We have since added a guard in our adapter to safely bypass `cosine_similarity` validations on empty arrays.
+*Upstream Library Block & Directory Mismatch (Resolved)*:
+The `article` stage was initially blocked by two underlying issues:
+1. **Empty Search Crash**: An upstream `knowledge-storm` library bug where empty DuckDuckGo search results triggered `ValueError: Expected 2D array, got 1D array instead` inside `cosine_similarity` during retrieval. This was guarded by adding an empty-retrieved snippet monkey-patch to `StormInformationTable` in `loop/storm_adapter.py`.
+2. **Case-Sensitive Directory Mismatch**: STORM's internal slugification named its output folder `Solid-state_battery_commercialization/` (capitalized with hyphens), whereas the orchestrator looked in `solidstate_battery_commercialization/` (lowercased without hyphens). Because the orchestrator couldn't find `storm_gen_article.txt`, it fell back to parsing empty content, leading the parser LLM to hallucinate off-topic "Loop Engineering" articles that the verifier correctly rejected.
+This silent mismatch caused the loop to cycle for **70 total attempts** across several resumes.
+
+*Resolution & E2E Completion*:
+To fix these issues, we implemented two enhancements:
+- **STORM Directory Sync**: We added a `sync_storm_files` helper in `loop/storm_stages.py` that dynamically locates the STORM output directory and copies all generated files (such as `storm_gen_article.txt` and `storm_gen_article_polished.txt`) into the orchestrator's canonical directory.
+- **Citation Fallback Harvesting**: When empty searches resulted in an empty `url_to_info.json`, we harvested verified source URLs from the upstream `perspectives.json` to reconstruct the citation references.
+
+Once these patches were applied and the orchestrator was resumed, the article stage immediately resolved and passed verification in a **single attempt** (attempt 70/iteration 73). The peer review stage passed on the next iteration, completing the run successfully with **0 active rejections** and exporting the final report to `artifacts/final/1bc3e040-6d2d-4d52-ace8-f1f3d91f9702.json`.
 
 
