@@ -42,7 +42,7 @@ This document logs the key changes, architecture, and design decisions made to i
 
 ## Verification Outcomes
 
-- **Unit Tests**: Added robust suites to `loop/tests.py`, including custom config dynamic threshold validations and production fixes (schema wrapping, unicode url encoding, and 403 bot-detection bypass), expanding the unit test count to **33 passing tests**.
+- **Unit Tests**: Added robust suites to `loop/tests.py`, including custom config dynamic threshold validations and production fixes (schema wrapping, unicode url encoding, and 403 bot-detection bypass), expanding the unit test count to **35 passing tests**.
 - **Mock STORM Run**: Verified 3 configured topics (`EV battery supply chain 2026`, `Solid-state battery commercialization`, and `Chinese EV export tariffs impact` — totaling 18 stage items) concurrently resolving their stages over a 9-iteration loop under config-driven thresholds.
 - **Adversarial Recovery**:
   - `INJECT_MISSING_PERSPECTIVE="historian"` correctly triggered failure at `perspectives` attempt 0, recovering on attempt 1.

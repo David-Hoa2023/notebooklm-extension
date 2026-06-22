@@ -379,6 +379,41 @@ class TestProductionFixes(unittest.TestCase):
         self.assertEqual(res["title"], "Reference Page (Anti-Scrape)")
         self.assertIn("blocks automated scraping with 403", res["excerpt"])
 
+    @patch("urllib.request.urlopen")
+    def test_http_other_exception_handling(self, mock_urlopen):
+        # We mock urlopen to raise an urllib.error.HTTPError for 500
+        from urllib.error import HTTPError
+        import io
+        
+        mock_urlopen.side_effect = HTTPError(
+            "https://example.com/error-page", 
+            500, 
+            "Internal Server Error", 
+            {}, 
+            io.BytesIO(b"")
+        )
+        
+        url = "https://example.com/error-page"
+        res = fetch_source_url(url)
+        
+        # Should return 200 with HTTP 500 message under new feeds behavior
+        self.assertEqual(res["status_code"], 200)
+        self.assertEqual(res["title"], "Reference Page (HTTP 500)")
+        self.assertIn("Returned HTTP code 500 during fetch", res["excerpt"])
+
+    @patch("urllib.request.urlopen")
+    def test_network_exception_handling(self, mock_urlopen):
+        # We mock urlopen to raise a network exception
+        mock_urlopen.side_effect = Exception("Connection refused")
+        
+        url = "https://example.com/network-error"
+        res = fetch_source_url(url)
+        
+        # Should return 200 with Network Error message under new feeds behavior
+        self.assertEqual(res["status_code"], 200)
+        self.assertEqual(res["title"], "Reference Page (Network Error)")
+        self.assertIn("Encountered network or DNS error (Connection refused)", res["excerpt"])
+
     def test_deterministic_verify_checks(self):
         from loop.storm_verify import run_deterministic_verify_checks
         
